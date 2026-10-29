@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { DoctorProfileController } from './doctor-profile.controller.js';
+import { protect } from '../../middleware/auth.js';
+import { restrictTo } from '../../middleware/auth.js';
+
+const router = Router();
+const doctorProfileController = new DoctorProfileController();
+
+router.get('/', doctorProfileController.getAll);
+router.get('/:id', doctorProfileController.getPublicProfile);
+router.post('/', protect, restrictTo('doctor'), doctorProfileController.createOrUpdate);
+router.get('/me/profile', protect, restrictTo('doctor'), doctorProfileController.getMyProfile);
+
+export default router;
