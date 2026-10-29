@@ -33,6 +33,11 @@ const userSchema = new mongoose.Schema(
     },
     googleId: String,
     avatar: String,
+    emailVerificationTokenHash: String,
+    emailVerificationExpiresAt: Date,
+    passwordResetTokenHash: String,
+    passwordResetExpiresAt: Date,
+    sessionVersion: { type: Number, default: 0 },
   },
   {
     timestamps: true,

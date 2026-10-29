@@ -20,6 +20,12 @@ export const protect = catchAsync(async (req, res, next) => {
   if (!currentUser) {
     throw new UnauthorizedError('The user belonging to this token does no longer exist.');
   }
+  if (decoded.sessionVersion !== currentUser.sessionVersion) {
+    throw new UnauthorizedError('Your session has expired. Please sign in again.');
+  }
+  if (!currentUser.isEmailVerified) {
+    throw new UnauthorizedError('Please verify your email before using this feature.');
+  }
 
   req.user = currentUser;
   next();

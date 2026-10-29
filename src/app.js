@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import healthRoutes from './routes/health.routes.js';
 import errorHandler from './middleware/errorHandler.js';
 import authRoutes from './modules/auth/auth.routes.js';
@@ -34,6 +35,7 @@ app.use(cors({
 app.use(securityHeaders);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use('/health', healthRoutes);
 app.use('/api/health', healthRoutes);

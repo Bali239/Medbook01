@@ -9,6 +9,16 @@ const envSchema = z.object({
   API_VERSION: z.string().default('v1'),
   CLIENT_URL: z.string().url().optional(),
   MONGODB_URI: z.string().optional(),
+  JWT_SECRET: z.string().default('dev-secret'),
+  JWT_EXPIRE: z.string().default('7d'),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().url().optional(),
+  GMAIL_SENDER: z.string().email().optional(),
+  GMAIL_CLIENT_ID: z.string().optional(),
+  GMAIL_CLIENT_SECRET: z.string().optional(),
+  GMAIL_REDIRECT_URI: z.string().url().default('http://localhost:5000/api/auth/gmail/callback'),
+  GMAIL_REFRESH_TOKEN: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

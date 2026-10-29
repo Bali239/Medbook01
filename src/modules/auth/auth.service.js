@@ -2,9 +2,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../../models/User.js';
 import { BadRequestError, UnauthorizedError } from '../../errors/AppError.js';
+import { createToken, hashToken, sendEmail } from './email.service.js';
 
-const signToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'dev-secret', {
+const signToken = (id, sessionVersion = 0) => {
+  return jwt.sign({ id, sessionVersion }, process.env.JWT_SECRET || 'dev-secret', {
     expiresIn: process.env.JWT_EXPIRE || '7d',
   });
 };
@@ -20,14 +21,18 @@ export class AuthService {
     
     const hashedPassword = await bcrypt.hash(password, 12);
     
+    const verificationToken = createToken();
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
       role: role === 'doctor' ? 'doctor' : 'patient',
+      emailVerificationTokenHash: hashToken(verificationToken),
+      emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
     
-    const token = signToken(user._id);
+    await sendEmail({ to: user.email, subject: 'Verify your MedBook email', text: `Verify your email: ${process.env.CLIENT_URL || 'http://localhost:3000'}/auth/verify-email?token=${verificationToken}`, html: `<p>Welcome to MedBook.</p><p><a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/auth/verify-email?token=${verificationToken}">Verify your email address</a></p>` });
+    const token = signToken(user._id, user.sessionVersion);
     
     return {
       token,
@@ -52,7 +57,7 @@ export class AuthService {
       throw new UnauthorizedError('Your account has been deactivated');
     }
     
-    const token = signToken(user._id);
+    const token = signToken(user._id, user.sessionVersion);
     
     return {
       token,
@@ -64,4 +69,41 @@ export class AuthService {
       },
     };
   }
+
+  async verifyEmail(token) {
+    const user = await User.findOne({ emailVerificationTokenHash: hashToken(token), emailVerificationExpiresAt: { $gt: new Date() } });
+    if (!user) throw new BadRequestError('This verification link is invalid or expired');
+    user.isEmailVerified = true; user.emailVerificationTokenHash = undefined; user.emailVerificationExpiresAt = undefined;
+    await user.save();
+    return { user: this.publicUser(user), token: signToken(user._id, user.sessionVersion) };
+  }
+
+  async requestPasswordReset(email) {
+    const user = await User.findOne({ email });
+    if (!user) return;
+    const token = createToken(); user.passwordResetTokenHash = hashToken(token); user.passwordResetExpiresAt = new Date(Date.now() + 60 * 60 * 1000); await user.save();
+    await sendEmail({ to: user.email, subject: 'Reset your MedBook password', text: `Reset your password: ${process.env.CLIENT_URL}/auth/reset-password?token=${token}`, html: `<p><a href="${process.env.CLIENT_URL}/auth/reset-password?token=${token}">Reset your password</a></p>` });
+  }
+
+  async resetPassword(token, password) {
+    const user = await User.findOne({ passwordResetTokenHash: hashToken(token), passwordResetExpiresAt: { $gt: new Date() } });
+    if (!user) throw new BadRequestError('This password reset link is invalid or expired');
+    user.password = await bcrypt.hash(password, 12); user.passwordResetTokenHash = undefined; user.passwordResetExpiresAt = undefined; user.sessionVersion += 1; await user.save();
+    return { token: signToken(user._id, user.sessionVersion), user: this.publicUser(user) };
+  }
+
+  async googleLogin(profile) {
+    let user = await User.findOne({ $or: [{ googleId: profile.sub }, { email: profile.email }] });
+    if (user) {
+      if (!user.googleId) user.googleId = profile.sub;
+      user.isEmailVerified = true;
+      if (profile.picture && !user.avatar) user.avatar = profile.picture;
+      await user.save();
+    } else {
+      user = await User.create({ name: profile.name, email: profile.email, googleId: profile.sub, avatar: profile.picture, isEmailVerified: true, role: 'patient' });
+    }
+    return { token: signToken(user._id, user.sessionVersion), user: this.publicUser(user) };
+  }
+
+  publicUser(user) { return { id: user._id, name: user.name, email: user.email, role: user.role, isEmailVerified: user.isEmailVerified, avatar: user.avatar }; }
 }
