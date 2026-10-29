@@ -2,6 +2,11 @@ import jwt from 'jsonwebtoken';
 import { catchAsync } from '../utils/catchAsync.js';
 import { UnauthorizedError } from '../errors/AppError.js';
 import User from '../models/User.js';
+import { env } from '../config/env.js';
+
+export const isConfiguredAdmin = (email) => Boolean(
+  env.ADMIN_EMAIL && email?.toLowerCase() === env.ADMIN_EMAIL.toLowerCase(),
+);
 
 export const protect = catchAsync(async (req, res, next) => {
   let token;
@@ -23,8 +28,12 @@ export const protect = catchAsync(async (req, res, next) => {
   if (decoded.sessionVersion !== currentUser.sessionVersion) {
     throw new UnauthorizedError('Your session has expired. Please sign in again.');
   }
-  if (!currentUser.isEmailVerified) {
+  const configuredAdmin = isConfiguredAdmin(currentUser.email);
+  if (!currentUser.isEmailVerified && !configuredAdmin) {
     throw new UnauthorizedError('Please verify your email before using this feature.');
+  }
+  if (configuredAdmin) {
+    currentUser.role = 'admin';
   }
 
   req.user = currentUser;
@@ -33,7 +42,7 @@ export const protect = catchAsync(async (req, res, next) => {
 
 export const restrictTo = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    if (!roles.includes(req.user.role) && !isConfiguredAdmin(req.user.email)) {
       throw new UnauthorizedError('You do not have permission to perform this action');
     }
     next();

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import User from '../../models/User.js';
 import { BadRequestError, UnauthorizedError } from '../../errors/AppError.js';
 import { createToken, hashToken, sendEmail } from './email.service.js';
+import { env } from '../../config/env.js';
 
 const signToken = (id, sessionVersion = 0) => {
   return jwt.sign({ id, sessionVersion }, process.env.JWT_SECRET || 'dev-secret', {
@@ -42,12 +43,7 @@ export class AuthService {
     
     return {
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      user: this.publicUser(user),
     };
   }
   
@@ -67,12 +63,7 @@ export class AuthService {
     
     return {
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      user: this.publicUser(user),
     };
   }
 
@@ -146,11 +137,14 @@ export class AuthService {
   }
 
   publicUser(user) {
+    const isAdmin = env.ADMIN_EMAIL && user.email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
+    const role = isAdmin ? 'admin' : user.role;
     return {
       id: user._id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      role,
+      roles: isAdmin ? ['admin', 'doctor', 'patient'] : [role],
       isEmailVerified: user.isEmailVerified,
       avatar: user.avatar,
     };

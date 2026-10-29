@@ -21,7 +21,11 @@ export class AuthController {
   });
   
   getMe = catchAsync(async (req, res) => {
-    ApiResponse.success(res, { user: req.user }, 'User retrieved successfully');
+    ApiResponse.success(
+      res,
+      { user: authService.publicUser(req.user) },
+      'User retrieved successfully',
+    );
   });
 
   verifyEmail = catchAsync(async (req, res) => {
