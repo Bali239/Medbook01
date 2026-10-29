@@ -31,7 +31,7 @@ export class AuthService {
       emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
     
-    await sendEmail({ to: user.email, subject: 'Verify your MedBook email', text: `Verify your email: ${process.env.CLIENT_URL || 'http://localhost:3000'}/auth/verify-email?token=${verificationToken}`, html: `<p>Welcome to MedBook.</p><p><a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/auth/verify-email?token=${verificationToken}">Verify your email address</a></p>` });
+    await sendEmail({ to: user.email, subject: 'Verify your MedBook email', text: `Verify your email: ${process.env.CLIENT_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`, html: `<p>Welcome to MedBook.</p><p><a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}">Verify your email address</a></p>` });
     const token = signToken(user._id, user.sessionVersion);
     
     return {
@@ -82,7 +82,7 @@ export class AuthService {
     const user = await User.findOne({ email });
     if (!user) return;
     const token = createToken(); user.passwordResetTokenHash = hashToken(token); user.passwordResetExpiresAt = new Date(Date.now() + 60 * 60 * 1000); await user.save();
-    await sendEmail({ to: user.email, subject: 'Reset your MedBook password', text: `Reset your password: ${process.env.CLIENT_URL}/auth/reset-password?token=${token}`, html: `<p><a href="${process.env.CLIENT_URL}/auth/reset-password?token=${token}">Reset your password</a></p>` });
+    await sendEmail({ to: user.email, subject: 'Reset your MedBook password', text: `Reset your password: ${process.env.CLIENT_URL}/reset-password?token=${token}`, html: `<p><a href="${process.env.CLIENT_URL}/reset-password?token=${token}">Reset your password</a></p>` });
   }
 
   async resetPassword(token, password) {

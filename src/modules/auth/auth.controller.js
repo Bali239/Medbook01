@@ -35,10 +35,10 @@ export class AuthController {
   googleCallback = catchAsync(async (req, res) => {
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ code: req.query.code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: env.GOOGLE_REDIRECT_URI, grant_type: 'authorization_code' }) });
     const tokens = await tokenResponse.json();
-    if (!tokens.access_token) return res.redirect(`${env.CLIENT_URL}/auth/sign-in?error=google`);
+    if (!tokens.access_token) return res.redirect(`${env.CLIENT_URL}/sign-in?error=google`);
     const profileResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { Authorization: `Bearer ${tokens.access_token}` } });
     const result = await authService.googleLogin(await profileResponse.json());
-    res.redirect(`${env.CLIENT_URL}/auth/callback?token=${encodeURIComponent(result.token)}`);
+    res.redirect(`${env.CLIENT_URL}/callback?token=${encodeURIComponent(result.token)}`);
   });
 
   gmailAuthorize = (req, res) => {
