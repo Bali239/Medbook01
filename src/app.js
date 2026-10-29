@@ -39,3 +39,13 @@ app.use('/api/appointments', appointmentRoutes);
 import availabilityRoutes from './modules/availability/availability.routes.js';
 
 app.use('/api/availability', availabilityRoutes);
+import paymentRoutes from './modules/payments/payment.routes.js';
+
+app.use('/api/payments', paymentRoutes);
+import notificationRoutes from './modules/notifications/notification.routes.js';
+
+app.use('/api/notifications', notificationRoutes);
+import reviewRoutes from './modules/reviews/review.routes.js';
+
+app.use('/api/reviews', reviewRoutes);
+// Routes already imported above - ensure proper order
