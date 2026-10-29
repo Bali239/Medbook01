@@ -7,8 +7,8 @@ const router = Router();
 const doctorProfileController = new DoctorProfileController();
 
 router.get('/', doctorProfileController.getAll);
-router.get('/:id', doctorProfileController.getPublicProfile);
 router.post('/', protect, restrictTo('doctor'), doctorProfileController.createOrUpdate);
 router.get('/me/profile', protect, restrictTo('doctor'), doctorProfileController.getMyProfile);
+router.get('/:id', doctorProfileController.getPublicProfile);
 
 export default router;

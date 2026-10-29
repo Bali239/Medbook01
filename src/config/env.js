@@ -19,6 +19,9 @@ const envSchema = z.object({
   GMAIL_CLIENT_SECRET: z.string().optional(),
   GMAIL_REDIRECT_URI: z.string().url().default('http://localhost:5000/api/auth/gmail/callback'),
   GMAIL_REFRESH_TOKEN: z.string().optional(),
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
   ADMIN_EMAIL: z.string().email().or(z.literal('')).optional(),
 });
 

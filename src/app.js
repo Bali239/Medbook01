@@ -12,6 +12,7 @@ import availabilityRoutes from './modules/availability/availability.routes.js';
 import paymentRoutes from './modules/payments/payment.routes.js';
 import notificationRoutes from './modules/notifications/notification.routes.js';
 import reviewRoutes from './modules/reviews/review.routes.js';
+import patientProfileRoutes from './modules/patient-profiles/patient-profile.routes.js';
 import { securityHeaders } from './middleware/securityHeaders.js';
 
 const app = express();
@@ -48,6 +49,7 @@ app.use('/api/availability', availabilityRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/patient-profiles', patientProfileRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
