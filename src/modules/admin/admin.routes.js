@@ -8,7 +8,11 @@ const adminController = new AdminController();
 
 router.use(protect, restrictTo('admin'));
 
+router.get('/stats', adminController.getStats);
 router.patch('/doctors/:id/approve', adminController.approveDoctor);
 router.patch('/doctors/:id/reject', adminController.rejectDoctor);
+router.get('/users', adminController.getUsers);
+router.get('/appointments', adminController.getAppointments);
+router.get('/audit-logs', adminController.getAuditLogs);
 
 export default router;

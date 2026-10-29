@@ -49,3 +49,6 @@ import reviewRoutes from './modules/reviews/review.routes.js';
 
 app.use('/api/reviews', reviewRoutes);
 // Routes already imported above - ensure proper order
+import { securityHeaders } from './middleware/securityHeaders.js';
+
+app.use(securityHeaders);
