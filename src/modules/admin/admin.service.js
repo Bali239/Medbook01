@@ -1,53 +1,8 @@
-import DoctorProfile from '../../models/DoctorProfile.js';
 import User from '../../models/User.js';
 import Appointment from '../../models/Appointment.js';
 import AuditLog from '../../models/AuditLog.js';
-import { NotFoundError } from '../../errors/AppError.js';
 
 export class AdminService {
-  async approveDoctor(profileId, adminId) {
-    const profile = await DoctorProfile.findById(profileId);
-    if (!profile) {
-      throw new NotFoundError('Doctor profile not found');
-    }
-    
-    profile.status = 'approved';
-    profile.approvedBy = adminId;
-    profile.approvedAt = new Date();
-    profile.rejectionReason = undefined;
-    await profile.save();
-    
-    await AuditLog.create({
-      user: adminId,
-      action: 'APPROVE_DOCTOR',
-      resource: 'DoctorProfile',
-      resourceId: profileId,
-    });
-    
-    return profile;
-  }
-  
-  async rejectDoctor(profileId, adminId, reason) {
-    const profile = await DoctorProfile.findById(profileId);
-    if (!profile) {
-      throw new NotFoundError('Doctor profile not found');
-    }
-    
-    profile.status = 'rejected';
-    profile.rejectionReason = reason;
-    await profile.save();
-    
-    await AuditLog.create({
-      user: adminId,
-      action: 'REJECT_DOCTOR',
-      resource: 'DoctorProfile',
-      resourceId: profileId,
-      details: { reason },
-    });
-    
-    return profile;
-  }
-  
   async getAllUsers(filters = {}) {
     const query = {};
     if (filters.role) query.role = filters.role;

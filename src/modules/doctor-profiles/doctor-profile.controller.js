@@ -5,11 +5,6 @@ import { ApiResponse } from '../../utils/apiResponse.js';
 const doctorProfileService = new DoctorProfileService();
 
 export class DoctorProfileController {
-  createOrUpdate = catchAsync(async (req, res) => {
-    const profile = await doctorProfileService.createOrUpdateProfile(req.user.id, req.body);
-    ApiResponse.success(res, profile, 'Profile updated successfully');
-  });
-  
   getMyProfile = catchAsync(async (req, res) => {
     const profile = await doctorProfileService.getProfile(req.user.id);
     ApiResponse.success(res, profile, 'Profile retrieved successfully');

@@ -13,6 +13,9 @@ import paymentRoutes from './modules/payments/payment.routes.js';
 import notificationRoutes from './modules/notifications/notification.routes.js';
 import reviewRoutes from './modules/reviews/review.routes.js';
 import patientProfileRoutes from './modules/patient-profiles/patient-profile.routes.js';
+import doctorApplicationRoutes from './modules/doctor-applications/doctor-application.routes.js';
+import doctorApplicationAdminRoutes from './modules/doctor-applications/doctor-application.admin.routes.js';
+import specialtyRoutes from './modules/specialties/specialty.routes.js';
 import { securityHeaders } from './middleware/securityHeaders.js';
 
 const app = express();
@@ -42,6 +45,9 @@ app.use('/health', healthRoutes);
 app.use('/api/health', healthRoutes);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/doctor-applications', doctorApplicationRoutes);
+app.use('/api/admin/doctor-applications', doctorApplicationAdminRoutes);
+app.use('/api/specialties', specialtyRoutes);
 app.use('/api/doctors', doctorProfileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/appointments', appointmentRoutes);

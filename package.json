@@ -8,7 +8,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "lint": "echo 'no linter configured'",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "typecheck": "echo 'no typecheck configured'"
   },
   "keywords": [],
@@ -16,6 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -30,4 +31,3 @@
     "nodemon": "^3.1.7"
   }
 }
-
