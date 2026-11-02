@@ -35,11 +35,6 @@ export const validateApplicationCompleteness = (application) => {
   if (!application.languages?.length || application.languages.some((language) => !hasText(language))) {
     issues.push({ path: 'languages', message: 'Add at least one language' });
   }
-  requireText('biography', application.biography);
-  if ((application.biography || '').trim().length < 40) {
-    issues.push({ path: 'biography', message: 'Use at least 40 characters' });
-  }
-
   if (!application.qualifications?.length) {
     issues.push({ path: 'qualifications', message: 'Add at least one qualification' });
   }

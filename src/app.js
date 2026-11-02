@@ -16,6 +16,8 @@ import patientProfileRoutes from './modules/patient-profiles/patient-profile.rou
 import doctorApplicationRoutes from './modules/doctor-applications/doctor-application.routes.js';
 import doctorApplicationAdminRoutes from './modules/doctor-applications/doctor-application.admin.routes.js';
 import specialtyRoutes from './modules/specialties/specialty.routes.js';
+import registrationAuthorityRoutes from './modules/registration-authorities/registration-authority.routes.js';
+import languageRoutes from './modules/languages/language.routes.js';
 import { securityHeaders } from './middleware/securityHeaders.js';
 
 const app = express();
@@ -48,6 +50,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/doctor-applications', doctorApplicationRoutes);
 app.use('/api/admin/doctor-applications', doctorApplicationAdminRoutes);
 app.use('/api/specialties', specialtyRoutes);
+app.use('/api/registration-authorities', registrationAuthorityRoutes);
+app.use('/api/languages', languageRoutes);
 app.use('/api/doctors', doctorProfileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/appointments', appointmentRoutes);
