@@ -85,7 +85,6 @@ export const createDoctorApplicationUploadSignature = (userId, { purpose, fileNa
     type: deliveryType,
     overwrite: false,
     allowed_formats: (rule.imageOnly ? imageFormats : documentFormats).join(','),
-    max_file_size: rule.maxBytes,
     context,
     timestamp,
   };
