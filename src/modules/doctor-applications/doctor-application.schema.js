@@ -136,10 +136,13 @@ export const doctorApplicationAdminReviewSchema = {
 export const doctorApplicationIdSchema = { params: z.object({ id: objectId }) };
 export const doctorApplicationListSchema = {
   query: z.object({
-    status: z.enum(['submitted', 'under_review', 'requires_changes', 'approved', 'rejected']).optional(),
+    status: z.preprocess(
+      (value) => value === '' ? undefined : value,
+      z.enum(['submitted', 'under_review', 'requires_changes', 'approved', 'rejected']).optional(),
+    ),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
-  }).strict(),
+  }),
 };
 export const doctorApplicationUploadSignatureSchema = {
   body: z.object({
