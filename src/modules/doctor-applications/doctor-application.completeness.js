@@ -23,11 +23,6 @@ export const validateApplicationCompleteness = (application) => {
   if (!/^[+\d][\d\s().-]{5,29}$/.test(application.phoneNumber || '')) {
     issues.push({ path: 'phoneNumber', message: 'Enter a valid phone number' });
   }
-  requireText('introduction', application.introduction);
-  if ((application.introduction || '').trim().length < 20) {
-    issues.push({ path: 'introduction', message: 'Use at least 20 characters' });
-  }
-
   if (!application.specialty) issues.push({ path: 'specialty', message: 'Choose a medical specialty' });
   if (!['general_practitioner', 'specialist', 'consultant', 'senior_consultant', 'professor'].includes(application.professionalTitle)) {
     issues.push({ path: 'professionalTitle', message: 'Choose a professional title' });
