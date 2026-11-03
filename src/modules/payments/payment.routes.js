@@ -15,7 +15,8 @@ const router = Router();
 const paymentController = new PaymentController();
 const initializeLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
-	limit: 10,
+	// Keep local development usable while retaining the stricter production limit.
+	limit: process.env.NODE_ENV === 'development' ? 50 : 10,
 	standardHeaders: true,
 	legacyHeaders: false,
 	keyGenerator: (req) => req.user.id,
