@@ -3,17 +3,28 @@ import Appointment from '../../models/Appointment.js';
 import DoctorProfile from '../../models/DoctorProfile.js';
 import SlotHold from '../../models/SlotHold.js';
 import User from '../../models/User.js';
+import mongoose from 'mongoose';
 import { getZonedAppointmentSlot, localDateTimeToUtc, timeRangesOverlap, timeStringToMinutes } from '../appointments/appointment-time.js';
 import { BadRequestError, NotFoundError } from '../../errors/AppError.js';
 import { catchAsync } from '../../utils/catchAsync.js';
 
 export class AvailabilityService {
   async setAvailability(doctorId, schedules) {
-    // Remove existing and create new
-    await Availability.deleteMany({ doctor: doctorId });
-    const availabilities = await Availability.insertMany(
-      schedules.map(s => ({ ...s, doctor: doctorId }))
-    );
+    const session = await mongoose.startSession();
+    let availabilities = [];
+    try {
+      await session.withTransaction(async () => {
+        await Availability.deleteMany({ doctor: doctorId }, { session });
+        availabilities = schedules.length
+          ? await Availability.insertMany(
+            schedules.map((schedule) => ({ ...schedule, doctor: doctorId })),
+            { session },
+          )
+          : [];
+      });
+    } finally {
+      await session.endSession();
+    }
     return availabilities;
   }
   

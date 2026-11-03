@@ -4,6 +4,7 @@ import { protect } from '../../middleware/auth.js';
 import { restrictTo } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { z } from 'zod';
+import { setAvailabilitySchema } from './availability.schema.js';
 
 const router = Router();
 const availabilityController = new AvailabilityController();
@@ -14,6 +15,6 @@ const slotsRequest = {
 
 router.get('/:doctorId/slots', validate(slotsRequest), availabilityController.getSlots);
 router.get('/:doctorId', availabilityController.getAvailability);
-router.post('/', protect, restrictTo('doctor'), availabilityController.setAvailability);
+router.post('/', protect, restrictTo('doctor'), validate(setAvailabilitySchema), availabilityController.setAvailability);
 
 export default router;
