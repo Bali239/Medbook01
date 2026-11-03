@@ -14,6 +14,36 @@ export class AdminController {
     const doctors = await adminService.getAllDoctors(req.query);
     ApiResponse.success(res, doctors, 'Doctors retrieved successfully');
   });
+
+  getSettings = catchAsync(async (req, res) => {
+    const settings = await adminService.getPlatformSettings();
+    ApiResponse.success(res, settings, 'Platform settings retrieved successfully');
+  });
+
+  updateSettings = catchAsync(async (req, res) => {
+    const settings = await adminService.updatePlatformSettings(req.body);
+    ApiResponse.success(res, settings, 'Platform settings updated successfully');
+  });
+
+  getPolicies = catchAsync(async (req, res) => {
+    const policies = await adminService.getPolicies(req.query);
+    ApiResponse.success(res, policies, 'Policies retrieved successfully');
+  });
+
+  createPolicy = catchAsync(async (req, res) => {
+    const policy = await adminService.createPolicy(req.body, req.user.id);
+    ApiResponse.success(res, policy, 'Policy created successfully', 201);
+  });
+
+  updatePolicy = catchAsync(async (req, res) => {
+    const policy = await adminService.updatePolicy(req.params.policyId, req.body, req.user.id);
+    ApiResponse.success(res, policy, 'Policy updated successfully');
+  });
+
+  deletePolicy = catchAsync(async (req, res) => {
+    await adminService.deletePolicy(req.params.policyId);
+    ApiResponse.success(res, null, 'Policy deleted successfully');
+  });
   
   getAppointments = catchAsync(async (req, res) => {
     const appointments = await adminService.getAllAppointments(req.query);

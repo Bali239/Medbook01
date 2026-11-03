@@ -9,6 +9,12 @@ const adminController = new AdminController();
 router.use(protect, restrictTo('admin'));
 
 router.get('/stats', adminController.getStats);
+router.get('/settings', adminController.getSettings);
+router.put('/settings', adminController.updateSettings);
+router.get('/policies', adminController.getPolicies);
+router.post('/policies', adminController.createPolicy);
+router.patch('/policies/:policyId', adminController.updatePolicy);
+router.delete('/policies/:policyId', adminController.deletePolicy);
 router.get('/users', adminController.getUsers);
 router.get('/doctors', adminController.getDoctors);
 router.get('/appointments', adminController.getAppointments);

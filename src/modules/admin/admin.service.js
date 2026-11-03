@@ -2,9 +2,11 @@ import User from '../../models/User.js';
 import Appointment from '../../models/Appointment.js';
 import AuditLog from '../../models/AuditLog.js';
 import mongoose from 'mongoose';
-import { NotFoundError } from '../../errors/AppError.js';
+import { BadRequestError, NotFoundError } from '../../errors/AppError.js';
 import DoctorProfile from '../../models/DoctorProfile.js';
 import DoctorApplication from '../../models/DoctorApplication.js';
+import PlatformSetting from '../../models/PlatformSetting.js';
+import Policy from '../../models/Policy.js';
 
 const formatAppointment = (appointment) => ({
   ...appointment,
@@ -29,7 +31,92 @@ const formatAppointment = (appointment) => ({
   } : null,
 });
 
+const normalizePolicyInput = (values = {}, partial = false) => {
+  const data = {};
+  if (!partial || values.title !== undefined) data.title = String(values.title || '').trim();
+  if (!partial || values.slug !== undefined) data.slug = String(values.slug || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (!partial || values.type !== undefined) data.type = values.type || 'custom';
+  if (!partial || values.summary !== undefined) data.summary = String(values.summary || '').trim();
+  if (!partial || values.content !== undefined) data.content = String(values.content || '').trim();
+  if (!partial || values.isPublished !== undefined) data.isPublished = Boolean(values.isPublished);
+  if (!data.title || (!partial && !data.slug) || !data.content) throw new BadRequestError('Policy title, slug, and content are required');
+  if (data.type && !['booking', 'cancellation_refund', 'privacy', 'terms', 'notifications', 'custom'].includes(data.type)) throw new BadRequestError('Invalid policy type');
+  return data;
+};
+
 export class AdminService {
+  async getPolicies({ page = 1, limit = 20, search, type, published } = {}) {
+    const safePage = Math.max(Number.parseInt(page, 10) || 1, 1);
+    const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 100);
+    const query = {};
+    if (type) query.type = type;
+    if (published === 'true') query.isPublished = true;
+    if (published === 'false') query.isPublished = false;
+    if (search?.trim()) query.$or = [
+      { title: { $regex: search.trim(), $options: 'i' } },
+      { slug: { $regex: search.trim(), $options: 'i' } },
+      { summary: { $regex: search.trim(), $options: 'i' } },
+    ];
+    const [policies, total] = await Promise.all([
+      Policy.find(query).populate('updatedBy', 'name email').sort('-updatedAt').skip((safePage - 1) * safeLimit).limit(safeLimit).lean(),
+      Policy.countDocuments(query),
+    ]);
+    return { policies, total, page: safePage, limit: safeLimit };
+  }
+
+  async createPolicy(values, adminId) {
+    const data = normalizePolicyInput(values);
+    return Policy.create({ ...data, updatedBy: adminId });
+  }
+
+  async updatePolicy(policyId, values, adminId) {
+    const data = normalizePolicyInput(values, true);
+    const policy = await Policy.findByIdAndUpdate(
+      policyId,
+      { $set: { ...data, updatedBy: adminId }, $inc: { version: 1 } },
+      { returnDocument: 'after', runValidators: true },
+    );
+    if (!policy) throw new NotFoundError('Policy not found');
+    return policy;
+  }
+
+  async deletePolicy(policyId) {
+    const policy = await Policy.findByIdAndDelete(policyId);
+    if (!policy) throw new NotFoundError('Policy not found');
+  }
+
+  async getPlatformSettings() {
+    const settings = await PlatformSetting.findOneAndUpdate(
+      { key: 'platform' },
+      { $setOnInsert: { key: 'platform' } },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true, lean: true },
+    );
+    return settings;
+  }
+
+  async updatePlatformSettings(values = {}) {
+    const allowed = {
+      defaultAppointmentDurationMinutes: values.defaultAppointmentDurationMinutes,
+      cancellationRefundHours: values.cancellationRefundHours,
+      notificationsEnabled: values.notificationsEnabled,
+      maintenanceMode: values.maintenanceMode,
+      supportEmail: values.supportEmail,
+    };
+    if (![15, 30, 60].includes(Number(allowed.defaultAppointmentDurationMinutes))) {
+      throw new BadRequestError('Default appointment duration must be 15, 30, or 60 minutes');
+    }
+    if (!Number.isInteger(Number(allowed.cancellationRefundHours)) || Number(allowed.cancellationRefundHours) < 0 || Number(allowed.cancellationRefundHours) > 720) {
+      throw new BadRequestError('Cancellation refund hours must be between 0 and 720');
+    }
+    if (allowed.supportEmail && !/^\S+@\S+\.\S+$/.test(allowed.supportEmail)) throw new BadRequestError('Support email is invalid');
+    const settings = await PlatformSetting.findOneAndUpdate(
+      { key: 'platform' },
+      { $set: { ...allowed, defaultAppointmentDurationMinutes: Number(allowed.defaultAppointmentDurationMinutes), cancellationRefundHours: Number(allowed.cancellationRefundHours) } },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true, runValidators: true, lean: true },
+    );
+    return settings;
+  }
+
   async getAllUsers(filters = {}) {
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
