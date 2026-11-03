@@ -3,6 +3,8 @@ import Appointment from '../../models/Appointment.js';
 import AuditLog from '../../models/AuditLog.js';
 import mongoose from 'mongoose';
 import { NotFoundError } from '../../errors/AppError.js';
+import DoctorProfile from '../../models/DoctorProfile.js';
+import DoctorApplication from '../../models/DoctorApplication.js';
 
 const formatAppointment = (appointment) => ({
   ...appointment,
@@ -29,6 +31,8 @@ const formatAppointment = (appointment) => ({
 
 export class AdminService {
   async getAllUsers(filters = {}) {
+    const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
     const query = {};
     if (filters.role) query.role = filters.role;
     if (filters.search) {
@@ -37,8 +41,78 @@ export class AdminService {
         { email: { $regex: filters.search, $options: 'i' } },
       ];
     }
-    const users = await User.find(query).select('-password').sort('-createdAt');
-    return users;
+    const [users, total] = await Promise.all([
+      User.find(query).select('-password').sort('-createdAt').skip((page - 1) * limit).limit(limit).lean(),
+      User.countDocuments(query),
+    ]);
+    return { users, total, page, limit };
+  }
+
+  async getAllDoctors(filters = {}) {
+    const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
+    const userQuery = { role: 'doctor' };
+    if (filters.search?.trim()) {
+      const search = filters.search.trim();
+      const matchingProfiles = await DoctorProfile.find({
+        $or: [
+          { fullName: { $regex: search, $options: 'i' } },
+          { specialty: { $regex: search, $options: 'i' } },
+        ],
+      }).select('user').lean();
+      userQuery.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { _id: { $in: matchingProfiles.map((profile) => profile.user) } },
+      ];
+    }
+    const [users, total] = await Promise.all([
+      User.find(userQuery).select('-password').sort('-createdAt').skip((page - 1) * limit).limit(limit).lean(),
+      User.countDocuments(userQuery),
+    ]);
+    const userIds = users.map((user) => user._id);
+    const [profiles, applications] = await Promise.all([
+      DoctorProfile.find({ user: { $in: userIds } }).populate('specialtyId', 'name slug').lean(),
+      DoctorApplication.find({ user: { $in: userIds } }).select('user status submittedAt reviewedAt feedback').lean(),
+    ]);
+    const profilesByUser = new Map(profiles.map((profile) => [String(profile.user), profile]));
+    const applicationsByUser = new Map(applications.map((application) => [String(application.user), application]));
+    return {
+      doctors: users.map((user) => {
+        const profile = profilesByUser.get(String(user._id));
+        const application = applicationsByUser.get(String(user._id));
+        return {
+          id: String(user._id),
+          name: user.name,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          isActive: user.isActive,
+          isEmailVerified: user.isEmailVerified,
+          createdAt: user.createdAt,
+          profile: profile ? {
+            id: String(profile._id),
+            fullName: profile.fullName,
+            specialty: profile.specialtyId ? { id: String(profile.specialtyId._id), name: profile.specialtyId.name, slug: profile.specialtyId.slug } : { name: profile.specialty },
+            professionalTitle: profile.professionalTitle,
+            licenseNumber: profile.licenseNumber,
+            clinicName: profile.clinicName,
+            clinicCity: profile.clinicCity,
+            status: profile.status,
+            approvedAt: profile.approvedAt,
+          } : null,
+          application: application ? {
+            id: String(application._id),
+            status: application.status,
+            submittedAt: application.submittedAt,
+            reviewedAt: application.reviewedAt,
+            feedback: application.feedback,
+          } : null,
+        };
+      }),
+      total,
+      page,
+      limit,
+    };
   }
   
   async getAllAppointments(filters = {}) {

@@ -9,6 +9,11 @@ export class AdminController {
     const users = await adminService.getAllUsers(req.query);
     ApiResponse.success(res, users, 'Users retrieved successfully');
   });
+
+  getDoctors = catchAsync(async (req, res) => {
+    const doctors = await adminService.getAllDoctors(req.query);
+    ApiResponse.success(res, doctors, 'Doctors retrieved successfully');
+  });
   
   getAppointments = catchAsync(async (req, res) => {
     const appointments = await adminService.getAllAppointments(req.query);
