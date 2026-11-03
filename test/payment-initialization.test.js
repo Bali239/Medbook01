@@ -8,7 +8,7 @@ const query = (value) => ({
   then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); },
 });
 
-const setupService = ({ existingPayment = null } = {}) => {
+const setupService = ({ existingPayment = null, stripeIntentStatus = 'requires_payment_method' } = {}) => {
   const stripeCalls = [];
   const savedPayments = [];
   const pricingSnapshot = {
@@ -53,9 +53,9 @@ const setupService = ({ existingPayment = null } = {}) => {
       paymentIntents: {
         create: async (params, options) => {
           stripeCalls.push({ params, options });
-          return { id: 'pi_test', client_secret: 'pi_test_secret', status: 'requires_payment_method' };
+          return { id: 'pi_test', client_secret: 'pi_test_secret', status: stripeIntentStatus };
         },
-        retrieve: async (id) => ({ id, client_secret: 'pi_test_secret', status: 'requires_payment_method' }),
+        retrieve: async (id) => ({ id, client_secret: 'pi_test_secret', status: stripeIntentStatus }),
       },
     }),
     customerService: { getOrCreateForPatient: async () => ({ id: 'cus_1' }) },
@@ -103,6 +103,17 @@ test('PaymentIntent amount comes from backend pricing, not a submitted amount', 
   assert.equal(stripeCalls[0].params.metadata.payment_id, 'payment-1');
   assert.equal(savedPayments[0].pricingSnapshot.amountMinor, 1807);
   assert.equal(result.clientSecret, 'pi_test_secret');
+});
+
+test('terminal Stripe PaymentIntents do not return a client secret for Elements', async () => {
+  const { service } = setupService({ stripeIntentStatus: 'succeeded' });
+  const result = await service.initialize('patient-1', {
+    doctorId: 'doctor-1',
+    startAt: '2026-11-04T04:00:00.000Z',
+    idempotencyKey: '3a0a9456-8a38-4e02-9d91-4bd0f986e201',
+  });
+
+  assert.equal(result.clientSecret, null);
 });
 
 test('payment initialization schema rejects a client-supplied amount', () => {

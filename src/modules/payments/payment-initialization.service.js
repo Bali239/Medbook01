@@ -215,7 +215,7 @@ export class PaymentInitializationService {
       } : null,
       holdExpiresAt: hold?.expiresAt || appointment?.holdExpiresAt || null,
       clientSecret: ['succeeded', 'canceled', 'refunded', 'partially_refunded', 'disputed'].includes(payment.status)
-        || intent.status === 'canceled'
+        || ['succeeded', 'canceled'].includes(intent.status)
         ? null
         : intent.client_secret,
     };
