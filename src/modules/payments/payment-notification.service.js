@@ -2,6 +2,7 @@ import { NotificationService } from '../notifications/notification.service.js';
 import { EmailDeliveryService } from '../notifications/email-delivery.service.js';
 import Appointment from '../../models/Appointment.js';
 import User from '../../models/User.js';
+import { env } from '../../config/env.js';
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
   '&': '&amp;',
@@ -30,6 +31,20 @@ export class PaymentNotificationService {
     this.emailDeliveryService = emailDeliveryService;
     this.appointmentModel = appointmentModel;
     this.userModel = userModel;
+  }
+
+  async notifyAdmins({ type, title, message, data, dedupeKey }) {
+    const adminCriteria = [{ role: 'admin' }];
+    if (env.ADMIN_EMAIL) adminCriteria.push({ email: env.ADMIN_EMAIL.toLowerCase() });
+    const admins = await this.userModel.find({ isActive: true, $or: adminCriteria }).select('_id');
+    await Promise.all(admins.map((admin) => this.notificationService.createNotification({
+      recipient: admin._id,
+      type,
+      title,
+      message,
+      data,
+      dedupeKey: `${dedupeKey}:admin:${admin._id}`,
+    })));
   }
 
   async notifyBookingConfirmed(payment) {
@@ -76,6 +91,13 @@ export class PaymentNotificationService {
         dedupeKey: `appointment:${reference}:confirmed:doctor`,
       });
     }
+    await this.notifyAdmins({
+      type: 'appointment_confirmed',
+      title: 'New appointment confirmed',
+      message: `A new appointment was confirmed for ${when}.`,
+      data: { appointmentId: reference, paymentId: String(payment._id) },
+      dedupeKey: `appointment:${reference}:confirmed`,
+    });
   }
 
   async notifyUnfulfillablePayment(payment) {
@@ -87,6 +109,13 @@ export class PaymentNotificationService {
       type: 'payment_reconciliation',
       title: 'Appointment time is no longer available',
       message: 'Your payment was received after the appointment time became unavailable. A full refund has been started.',
+      data: { appointmentId: String(payment.appointment), paymentId: String(payment._id) },
+      dedupeKey,
+    });
+    await this.notifyAdmins({
+      type: 'payment_reconciliation',
+      title: 'Appointment payment needs attention',
+      message: 'A payment was received after its appointment time became unavailable and a refund was started.',
       data: { appointmentId: String(payment.appointment), paymentId: String(payment._id) },
       dedupeKey,
     });
@@ -109,6 +138,13 @@ export class PaymentNotificationService {
       type: 'payment_failed',
       title: 'Payment was not completed',
       message,
+      data: { appointmentId: String(payment.appointment), paymentId: String(payment._id) },
+      dedupeKey,
+    });
+    await this.notifyAdmins({
+      type: 'payment_failed',
+      title: 'Appointment payment failed',
+      message: 'An appointment payment was not completed.',
       data: { appointmentId: String(payment.appointment), paymentId: String(payment._id) },
       dedupeKey,
     });
@@ -166,6 +202,13 @@ export class PaymentNotificationService {
         dedupeKey: `appointment:${appointmentId}:cancelled:doctor`,
       });
     }
+    await this.notifyAdmins({
+      type: 'appointment_cancelled',
+      title: 'Appointment canceled',
+      message: `An appointment scheduled for ${when} was canceled.`,
+      data: { appointmentId },
+      dedupeKey: `appointment:${appointmentId}:cancelled`,
+    });
   }
 
   async notifyRefundUpdated(refund, payment) {
@@ -177,6 +220,13 @@ export class PaymentNotificationService {
         : 'Your appointment refund is being processed.';
     await this.notificationService.createNotification({
       recipient: refund.patient,
+      type: 'refund_status_changed',
+      title: 'Refund status updated',
+      message,
+      data: { appointmentId: String(refund.appointment), paymentId: String(payment._id), refundId: String(refund._id) },
+      dedupeKey,
+    });
+    await this.notifyAdmins({
       type: 'refund_status_changed',
       title: 'Refund status updated',
       message,

@@ -172,7 +172,7 @@ const removeUnreferencedAssets = async (userId, before, after) => {
   }));
 };
 
-const notifyApplicant = async (user, status, reason = '') => {
+const notifyApplicant = async (user, status, reason = '', applicationId = null) => {
   const titleByStatus = {
     submitted: 'Doctor application submitted',
     under_review: 'Doctor application under review',
@@ -192,7 +192,7 @@ const notifyApplicant = async (user, status, reason = '') => {
       type: `doctor_application_${status}`,
       title,
       message,
-      data: { status },
+      data: { status, applicationId: applicationId ? String(applicationId) : undefined },
     });
   } catch (error) {
     console.error('Unable to persist doctor application notification', error.message);
@@ -209,6 +209,24 @@ const notifyApplicant = async (user, status, reason = '') => {
     } catch (error) {
       console.error('Unable to send doctor application email', error.message);
     }
+  }
+};
+
+const notifyAdminsOfSubmission = async (application, user) => {
+  try {
+    const adminCriteria = [{ role: 'admin' }];
+    if (env.ADMIN_EMAIL) adminCriteria.push({ email: env.ADMIN_EMAIL.toLowerCase() });
+    const admins = await User.find({ isActive: true, $or: adminCriteria }).select('_id');
+    await Notification.insertMany(admins.map((admin) => ({
+      recipient: admin._id,
+      type: 'doctor_application_submitted',
+      title: 'New doctor application submitted',
+      message: `${user.name} submitted a doctor application for review.`,
+      data: { applicationId: String(application._id) },
+      dedupeKey: `doctor-application:${application._id}:submitted:admin:${admin._id}`,
+    })), { ordered: false });
+  } catch (error) {
+    console.error('Unable to persist admin doctor application notification', error.message);
   }
 };
 
@@ -383,7 +401,8 @@ export class DoctorApplicationService {
     ).populate('specialty', 'name slug');
 
     if (!submitted) throw new ConflictError('Application status changed; reload and try again');
-    await notifyApplicant(user, 'submitted');
+    await notifyApplicant(user, 'submitted', '', submitted._id);
+    await notifyAdminsOfSubmission(submitted, user);
     return summarizeApplication(submitted);
   }
 
@@ -486,7 +505,7 @@ export class DoctorApplicationService {
       console.error('Unable to record doctor application review audit event', error.message);
     }
 
-    await notifyApplicant(user, status, reason);
+    await notifyApplicant(user, status, reason, application._id);
     return this.getForAdmin(applicationId);
   }
 
