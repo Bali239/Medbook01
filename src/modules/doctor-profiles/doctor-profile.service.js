@@ -1,4 +1,6 @@
 import DoctorProfile from '../../models/DoctorProfile.js';
+import DoctorApplication from '../../models/DoctorApplication.js';
+import mongoose from 'mongoose';
 import { NotFoundError } from '../../errors/AppError.js';
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -44,12 +46,42 @@ const publicDoctorProfile = (profile) => {
 };
 
 export class DoctorProfileService {
+  constructor({ profileModel = DoctorProfile, applicationModel = DoctorApplication, connection = mongoose } = {}) {
+    this.profileModel = profileModel;
+    this.applicationModel = applicationModel;
+    this.connection = connection;
+  }
+
   async getProfile(userId) {
     const profile = await DoctorProfile.findOne({ user: userId });
     if (!profile) {
       throw new NotFoundError('Profile not found');
     }
     return profile;
+  }
+
+  async updateBookingSettings(userId, { appointmentDurationMinutes, clinicTimeZone }) {
+    let updatedProfile;
+    const session = await this.connection.startSession();
+    try {
+      await session.withTransaction(async () => {
+        updatedProfile = await this.profileModel.findOneAndUpdate(
+          { user: userId, status: 'approved' },
+          { $set: { appointmentDurationMinutes, clinicTimeZone } },
+          { new: true, runValidators: true, session },
+        );
+        if (!updatedProfile) throw new NotFoundError('An approved doctor profile is required to configure booking.');
+
+        await this.applicationModel.updateOne(
+          { user: userId, status: 'approved' },
+          { $set: { appointmentDurationMinutes, clinicTimeZone } },
+          { session },
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
+    return updatedProfile;
   }
   
   async getAllProfiles(filters = {}) {

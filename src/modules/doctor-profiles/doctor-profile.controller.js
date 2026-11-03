@@ -9,6 +9,11 @@ export class DoctorProfileController {
     const profile = await doctorProfileService.getProfile(req.user.id);
     ApiResponse.success(res, profile, 'Profile retrieved successfully');
   });
+
+  updateBookingSettings = catchAsync(async (req, res) => {
+    const profile = await doctorProfileService.updateBookingSettings(req.user.id, req.body);
+    ApiResponse.success(res, profile, 'Booking settings updated');
+  });
   
   getAll = catchAsync(async (req, res) => {
     const profiles = await doctorProfileService.getAllProfiles(req.query);
