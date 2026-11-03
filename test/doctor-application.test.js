@@ -16,6 +16,8 @@ const completeApplication = {
   specialty: 'specialty-id',
   professionalTitle: 'specialist',
   yearsOfExperience: 10,
+  appointmentDurationMinutes: 30,
+  clinicTimeZone: 'Asia/Karachi',
   registrationNumber: 'REG-123',
   registrationAuthority: 'Medical Council',
   languages: ['English', 'Urdu'],

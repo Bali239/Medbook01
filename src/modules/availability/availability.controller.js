@@ -14,4 +14,9 @@ export class AvailabilityController {
     const availability = await availabilityService.getAvailability(req.params.doctorId);
     ApiResponse.success(res, availability, 'Availability retrieved successfully');
   });
+
+  getSlots = catchAsync(async (req, res) => {
+    const result = await availabilityService.getSlots(req.params.doctorId, req.query.date);
+    ApiResponse.success(res, result, 'Available slots retrieved');
+  });
 }

@@ -86,6 +86,8 @@ const draftBody = z.object({
     'general_practitioner', 'specialist', 'consultant', 'senior_consultant', 'professor',
   ]).optional(),
   yearsOfExperience: z.number().int().min(0).max(80).optional(),
+  appointmentDurationMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]).optional(),
+  clinicTimeZone: z.string().trim().max(100).optional(),
   registrationNumber: z.string().trim().max(100).optional(),
   registrationAuthority: z.string().trim().max(180).optional(),
   languages: z.array(z.string().trim().min(1).max(80)).max(20).optional(),

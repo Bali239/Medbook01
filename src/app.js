@@ -10,6 +10,8 @@ import adminRoutes from './modules/admin/admin.routes.js';
 import appointmentRoutes from './modules/appointments/appointment.routes.js';
 import availabilityRoutes from './modules/availability/availability.routes.js';
 import paymentRoutes from './modules/payments/payment.routes.js';
+import invoiceRoutes from './modules/payments/invoice.routes.js';
+import stripeWebhookRoutes from './modules/payments/stripe-webhook.routes.js';
 import notificationRoutes from './modules/notifications/notification.routes.js';
 import reviewRoutes from './modules/reviews/review.routes.js';
 import patientProfileRoutes from './modules/patient-profiles/patient-profile.routes.js';
@@ -39,12 +41,14 @@ app.use(cors({
   credentials: true,
 }));
 app.use(securityHeaders);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use('/health', healthRoutes);
 app.use('/api/health', healthRoutes);
+
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json', limit: '1mb' }), stripeWebhookRoutes);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/doctor-applications', doctorApplicationRoutes);
@@ -57,6 +61,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/invoices', invoiceRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/patient-profiles', patientProfileRoutes);

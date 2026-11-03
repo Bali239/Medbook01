@@ -23,6 +23,39 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
   ADMIN_EMAIL: z.string().email().or(z.literal('')).optional(),
+  STRIPE_SECRET_KEY: z.preprocess(
+    (value) => value === '' ? undefined : value,
+    z.string().regex(/^sk_test_/, 'Only Stripe test-mode secret keys are accepted').optional(),
+  ),
+  STRIPE_PUBLISHABLE_KEY: z.preprocess(
+    (value) => value === '' ? undefined : value,
+    z.string().regex(/^pk_test_/, 'Only Stripe test-mode publishable keys are accepted').optional(),
+  ),
+  STRIPE_WEBHOOK_SECRET: z.preprocess(
+    (value) => value === '' ? undefined : value,
+    z.string().regex(/^whsec_/, 'A valid Stripe webhook signing secret is required').optional(),
+  ),
+  STRIPE_CONSULTATION_PRODUCT_ID: z.preprocess(
+    (value) => value === '' ? undefined : value,
+    z.string().optional(),
+  ),
+  PAYMENTS_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  PAYMENT_CURRENCY: z.enum(['USD']).default('USD').transform((value) => value.toLowerCase()),
+  PAYMENT_HOLD_DURATION_MINUTES: z.coerce.number().int().positive().default(10),
+  FX_RATE_URL: z.string().url().default('https://open.er-api.com/v6/latest/PKR'),
+  FX_RATE_MAX_AGE_MINUTES: z.coerce.number().int().positive().default(1500),
+}).superRefine((values, context) => {
+  if (!values.PAYMENTS_ENABLED) return;
+
+  for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET']) {
+    if (!values[key]) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `${key} is required when payments are enabled`,
+      });
+    }
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);

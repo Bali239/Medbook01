@@ -121,6 +121,8 @@ const doctorApplicationSchema = new mongoose.Schema(
       enum: ['general_practitioner', 'specialist', 'consultant', 'senior_consultant', 'professor'],
     },
     yearsOfExperience: { type: Number, min: 0, max: 80 },
+    appointmentDurationMinutes: { type: Number, enum: [15, 30, 60] },
+    clinicTimeZone: { type: String, trim: true, maxlength: 100 },
     registrationNumber: { type: String, trim: true, maxlength: 100 },
     registrationAuthority: { type: String, trim: true, maxlength: 180 },
     languages: { type: [String], default: [] },

@@ -70,6 +70,8 @@ const patientProfileSchema = new mongoose.Schema(
     },
     emergencyContact: emergencyContactSchema,
     privacyConsentAt: Date,
+    stripeCustomerId: { type: String, select: false, trim: true },
+    stripeCustomerGeneration: { type: Number, select: false, default: 0, min: 0 },
   },
   { timestamps: true },
 );

@@ -80,6 +80,8 @@ const doctorProfileSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    appointmentDurationMinutes: { type: Number, enum: [15, 30, 60] },
+    clinicTimeZone: { type: String, trim: true, maxlength: 100 },
     clinicName: String,
     clinicAddress: String,
     clinicCity: String,

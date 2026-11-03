@@ -23,6 +23,7 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    dedupeKey: { type: String, trim: true },
     data: mongoose.Schema.Types.Mixed,
   },
   {
@@ -31,6 +32,7 @@ const notificationSchema = new mongoose.Schema(
 );
 
 notificationSchema.index({ recipient: 1, isRead: 1 });
+notificationSchema.index({ dedupeKey: 1 }, { unique: true, sparse: true });
 
 const Notification = mongoose.model('Notification', notificationSchema);
 

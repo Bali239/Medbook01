@@ -5,8 +5,8 @@ const encode = (value) => Buffer.from(value).toString('base64url');
 
 export const sendEmail = async ({ to, subject, text, html }) => {
   if (!env.GMAIL_CLIENT_ID || !env.GMAIL_CLIENT_SECRET || !env.GMAIL_SENDER || !env.GMAIL_REFRESH_TOKEN) {
-    console.warn(`[email dev fallback] ${subject} -> ${to}\n${text}`);
-    return;
+    console.info('[email dev fallback] Email queued without delivery credentials.');
+    return { delivered: false };
   }
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -19,6 +19,7 @@ export const sendEmail = async ({ to, subject, text, html }) => {
     method: 'POST', headers: { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw: encode(mime) }),
   });
   if (!result.ok) throw new Error(`Gmail API rejected email: ${await result.text()}`);
+  return { delivered: true };
 };
 
 export const createToken = () => crypto.randomBytes(32).toString('hex');

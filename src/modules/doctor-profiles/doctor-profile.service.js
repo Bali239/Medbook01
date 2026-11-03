@@ -16,6 +16,8 @@ const publicDoctorProfile = (profile) => {
     specialty,
     subSpecialty: profile.subSpecialty || '',
     professionalTitle: profile.professionalTitle || '',
+    appointmentDurationMinutes: profile.appointmentDurationMinutes || null,
+    clinicTimeZone: profile.clinicTimeZone || null,
     registrationNumber: profile.licenseNumber,
     registrationAuthority: profile.registrationAuthority || '',
     qualifications: profile.qualificationDetails?.length

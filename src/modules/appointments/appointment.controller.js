@@ -1,12 +1,12 @@
-import { AppointmentService } from './appointment.service.js';
 import { catchAsync } from '../../utils/catchAsync.js';
 import { ApiResponse } from '../../utils/apiResponse.js';
+import { AppointmentLifecycleService } from './appointment-lifecycle.service.js';
 
-const appointmentService = new AppointmentService();
+const appointmentLifecycleService = new AppointmentLifecycleService();
 
 export class AppointmentController {
-  holdSlot = catchAsync(async (req, res) => {
-    const hold = await appointmentService.holdSlot(req.user.id, req.body);
-    ApiResponse.success(res, hold, 'Slot held successfully', 201);
+  cancel = catchAsync(async (req, res) => {
+    const result = await appointmentLifecycleService.cancel(req.params.appointmentId, req.user, req.body);
+    ApiResponse.success(res, result, 'Appointment cancellation processed');
   });
 }

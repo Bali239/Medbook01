@@ -30,6 +30,14 @@ export const validateApplicationCompleteness = (application) => {
   if (!Number.isInteger(application.yearsOfExperience) || application.yearsOfExperience < 0 || application.yearsOfExperience > 80) {
     issues.push({ path: 'yearsOfExperience', message: 'Enter years of experience from 0 to 80' });
   }
+  if (![15, 30, 60].includes(application.appointmentDurationMinutes)) {
+    issues.push({ path: 'appointmentDurationMinutes', message: 'Choose an appointment duration of 15, 30, or 60 minutes' });
+  }
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: application.clinicTimeZone }).format(new Date());
+  } catch {
+    issues.push({ path: 'clinicTimeZone', message: 'Enter a valid IANA clinic time zone' });
+  }
   requireText('registrationNumber', application.registrationNumber);
   requireText('registrationAuthority', application.registrationAuthority);
   if (!application.languages?.length || application.languages.some((language) => !hasText(language))) {

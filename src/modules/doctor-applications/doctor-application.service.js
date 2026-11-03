@@ -259,6 +259,8 @@ const publicProfileFields = async (application) => {
     specialtyId: application.specialty,
     subSpecialty: application.subSpecialty,
     professionalTitle: application.professionalTitle,
+    appointmentDurationMinutes: application.appointmentDurationMinutes,
+    clinicTimeZone: application.clinicTimeZone,
     licenseNumber: application.registrationNumber,
     registrationAuthority: application.registrationAuthority,
     qualifications: qualificationDetails.map((qualification) => qualification.degreeName),
