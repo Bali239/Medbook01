@@ -287,7 +287,7 @@ export class DoctorApplicationService {
   async assertCanUpload(userId) {
     await assertRequiredActor(userId);
     const application = await DoctorApplication.findOne({ user: userId }).select('status');
-    if (application && !['draft', 'requires_changes'].includes(application.status)) {
+    if (application && !['draft', 'requires_changes', 'approved'].includes(application.status)) {
       throw new ForbiddenError('Files cannot be changed after an application is submitted');
     }
   }
@@ -318,7 +318,7 @@ export class DoctorApplicationService {
   async saveDraft(userId, data) {
     await assertRequiredActor(userId);
     let application = await DoctorApplication.findOne({ user: userId });
-    if (application && !['draft', 'requires_changes'].includes(application.status)) {
+    if (application && !['draft', 'requires_changes', 'approved'].includes(application.status)) {
       throw new ForbiddenError('Submitted applications cannot be edited');
     }
 
@@ -340,6 +340,13 @@ export class DoctorApplicationService {
       }
     } else {
       for (const [field, value] of Object.entries(mergedData)) application.set(field, value);
+      if (application.status === 'approved') {
+        application.status = 'draft';
+        application.reviewedBy = null;
+        application.reviewedAt = null;
+        application.feedback = '';
+        application.statusHistory.push({ from: 'approved', to: 'draft', actor: userId, at: new Date() });
+      }
       await application.save();
     }
 
