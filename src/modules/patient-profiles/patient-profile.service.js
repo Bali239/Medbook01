@@ -69,7 +69,7 @@ export class PatientProfileService {
       const profile = await PatientProfile.findOneAndUpdate(
         { user: userId },
         { $set: profileData, $setOnInsert: { user: userId } },
-        { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+        { returnDocument: 'after', upsert: true, runValidators: true, setDefaultsOnInsert: true },
       );
 
       const oldPublicId = previousProfile?.profilePicture?.publicId;

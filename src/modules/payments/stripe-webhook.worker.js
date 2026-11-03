@@ -61,7 +61,7 @@ export class StripeWebhookWorker {
         $set: { status: 'processing', leaseExpiresAt: new Date(this.now() + 60_000) },
         $inc: { attemptCount: 1 },
       },
-      { sort: { receivedAt: 1 }, new: true },
+      { sort: { receivedAt: 1 }, returnDocument: 'after' },
     ).select('+payload');
 
     if (!event) return false;

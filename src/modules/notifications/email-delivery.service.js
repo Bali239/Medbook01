@@ -14,7 +14,7 @@ export class EmailDeliveryService {
       return await this.deliveryModel.findOneAndUpdate(
         { dedupeKey: data.dedupeKey },
         { $setOnInsert: { ...data, status: 'queued', nextAttemptAt: new Date(this.now()) } },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
       );
     } catch (error) {
       if (error.code !== 11000) throw error;
@@ -36,7 +36,7 @@ export class EmailDeliveryService {
         $set: { status: 'processing', leaseExpiresAt: new Date(this.now() + 60_000) },
         $inc: { attempts: 1 },
       },
-      { sort: { createdAt: 1 }, new: true },
+      { sort: { createdAt: 1 }, returnDocument: 'after' },
     ).select('+to +text +html');
     if (!delivery) return false;
 

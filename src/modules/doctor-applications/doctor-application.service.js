@@ -379,7 +379,7 @@ export class DoctorApplicationService {
         },
         $push: { statusHistory: { from: previousStatus, to: 'submitted', actor: userId, at: now } },
       },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).populate('specialty', 'name slug');
 
     if (!submitted) throw new ConflictError('Application status changed; reload and try again');
@@ -461,7 +461,7 @@ export class DoctorApplicationService {
         },
         $push: { statusHistory: { from: previousStatus, to: status, actor: adminId, reason, at: now } },
       },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     if (!application) throw new ConflictError('Application status changed; reload and try again');
 
@@ -504,7 +504,7 @@ export class DoctorApplicationService {
         },
         $setOnInsert: { user: application.user },
       },
-      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+      { returnDocument: 'after', upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
     return profile;
   }

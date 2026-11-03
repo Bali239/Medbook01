@@ -81,7 +81,7 @@ export class RefundService {
         },
       },
       { $inc: { refundReservedAmountMinor: amountMinor } },
-      { new: true },
+      { returnDocument: 'after' },
     );
     if (!reservedPayment) throw new ConflictError('The refundable payment balance changed.');
 

@@ -11,7 +11,7 @@ export class NotificationService {
         return await this.notificationModel.findOneAndUpdate(
           { dedupeKey: data.dedupeKey },
           { $setOnInsert: data },
-          { upsert: true, new: true, setDefaultsOnInsert: true },
+          { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
         );
       } catch (error) {
         if (error.code !== 11000) throw error;
@@ -38,7 +38,7 @@ export class NotificationService {
     const notification = await this.notificationModel.findOneAndUpdate(
       { _id: notificationId, recipient: userId },
       { isRead: true },
-      { new: true }
+      { returnDocument: 'after' }
     );
     return notification;
   }

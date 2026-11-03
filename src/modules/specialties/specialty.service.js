@@ -36,7 +36,7 @@ export class SpecialtyService {
 
     try {
       const specialty = await Specialty.findByIdAndUpdate(id, { $set: update }, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true,
       });
       if (!specialty) throw new NotFoundError('Specialty not found');

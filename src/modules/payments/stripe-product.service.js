@@ -30,7 +30,7 @@ export class StripeProductService {
         await this.catalogModel.findOneAndUpdate(
           { key: 'consultation' },
             { key: 'consultation', stripeProductId: product.id, status: 'active' },
-          { upsert: true, new: true, setDefaultsOnInsert: true },
+          { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
         );
         return product;
       } catch (error) {
@@ -77,7 +77,7 @@ export class StripeProductService {
     await this.catalogModel.findOneAndUpdate(
       { key: 'consultation' },
       { key: 'consultation', stripeProductId: product.id, generation: generation + 1, status: 'active' },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
     return product;
   }

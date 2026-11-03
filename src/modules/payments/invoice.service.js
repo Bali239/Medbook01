@@ -106,7 +106,7 @@ export class InvoiceService {
           documentLocation: `/api/invoices/${invoiceNumber}/download`,
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
     const documentLocation = `/api/invoices/${invoice._id}/download`;
     if (invoice.documentLocation !== documentLocation) {
