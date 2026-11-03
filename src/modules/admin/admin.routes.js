@@ -11,6 +11,7 @@ router.use(protect, restrictTo('admin'));
 router.get('/stats', adminController.getStats);
 router.get('/users', adminController.getUsers);
 router.get('/appointments', adminController.getAppointments);
+router.get('/appointments/:appointmentId', adminController.getAppointment);
 router.get('/audit-logs', adminController.getAuditLogs);
 
 export default router;

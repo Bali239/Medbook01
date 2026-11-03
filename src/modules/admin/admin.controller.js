@@ -14,6 +14,11 @@ export class AdminController {
     const appointments = await adminService.getAllAppointments(req.query);
     ApiResponse.success(res, appointments, 'Appointments retrieved successfully');
   });
+
+  getAppointment = catchAsync(async (req, res) => {
+    const appointment = await adminService.getAppointment(req.params.appointmentId);
+    ApiResponse.success(res, appointment, 'Appointment retrieved successfully');
+  });
   
   getAuditLogs = catchAsync(async (req, res) => {
     const result = await adminService.getAuditLogs(req.query);
