@@ -33,6 +33,12 @@ export const protect = catchAsync(async (req, res, next) => {
     throw new UnauthorizedError('Please verify your email before using this feature.');
   }
   if (configuredAdmin) {
+    // Keep the configured administrator a single-role account in the database
+    // as well as in the current request context. This repairs old test accounts
+    // that were previously assigned patient/doctor roles.
+    if (currentUser.role !== 'admin') {
+      await User.updateOne({ _id: currentUser._id }, { $set: { role: 'admin' } });
+    }
     currentUser.role = 'admin';
   }
 
@@ -42,7 +48,7 @@ export const protect = catchAsync(async (req, res, next) => {
 
 export const restrictTo = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role) && !isConfiguredAdmin(req.user.email)) {
+    if (!roles.includes(req.user.role)) {
       throw new UnauthorizedError('You do not have permission to perform this action');
     }
     next();

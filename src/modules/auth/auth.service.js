@@ -23,11 +23,12 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 12);
     
     const verificationToken = createToken();
+    const configuredAdmin = env.ADMIN_EMAIL && email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      role: role === 'doctor' ? 'doctor' : 'patient',
+      role: configuredAdmin ? 'admin' : role === 'doctor' ? 'doctor' : 'patient',
       emailVerificationTokenHash: hashToken(verificationToken),
       emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
@@ -144,7 +145,7 @@ export class AuthService {
       name: user.name,
       email: user.email,
       role,
-      roles: isAdmin ? ['admin', 'doctor', 'patient'] : [role],
+      roles: [role],
       isEmailVerified: user.isEmailVerified,
       avatar: user.avatar,
     };
