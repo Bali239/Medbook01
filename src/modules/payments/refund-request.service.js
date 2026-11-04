@@ -94,6 +94,13 @@ export class RefundRequestService {
       statusHistory: [{ status: 'doctor_pending', actor: patientId, role: 'patient' }],
     });
     await this.notifyDoctorAndAdmins(request, 'refund_request_created');
+    await this.notifyPatient(
+      request,
+      action === 'reschedule'
+        ? 'Your date-change request was sent to the doctor. Your current appointment remains confirmed while it is under review.'
+        : 'Your cancellation request was sent to the doctor for review.',
+      'created',
+    );
     return this.toDto(request);
   }
 
@@ -154,6 +161,7 @@ export class RefundRequestService {
       request.rejectionReason = reason.trim();
       request.statusHistory.push({ status: 'rejected', actor: adminId, role: 'admin', reason: reason.trim() });
       await request.save();
+      await this.notifyDoctor(request, 'admin_rejected');
       await this.notifyPatient(request, `Your request was declined: ${reason.trim()}`, 'rejected');
       return this.toDto(request);
     }
@@ -210,6 +218,7 @@ export class RefundRequestService {
     request.replacementPayment = replacement?.paymentId;
     request.statusHistory.push({ status: 'refund_pending', actor: adminId, role: 'admin' });
     await request.save();
+    await this.notifyDoctor(request, 'admin_approved');
     await this.notifyPatient(request, request.action === 'reschedule'
       ? 'Your date-change request was approved. Complete payment for the new appointment; your original payment refund is processing.'
       : 'Your cancellation was approved. Your full refund is processing.', 'approved');
@@ -225,7 +234,9 @@ export class RefundRequestService {
       recipient: request.doctor,
       type,
       title: request.action === 'reschedule' ? 'Date-change request needs review' : 'Refund request needs review',
-      message: 'A patient request is waiting for your approval before final admin review.',
+      message: request.action === 'reschedule'
+        ? 'A patient requested a new appointment time. Review the proposed date and decide whether to approve it.'
+        : 'A patient cancellation request is waiting for your review.',
       data: { appointmentId: String(request.appointment), refundRequestId: String(request._id) },
       dedupeKey: `refund-request:${request._id}:doctor:${type}`,
     });
@@ -257,8 +268,10 @@ export class RefundRequestService {
     await Promise.all(admins.map((admin) => this.notificationService.createNotification({
       recipient: admin._id,
       type,
-      title: 'Refund request opened',
-      message: 'A patient refund request is waiting for doctor review.',
+      title: request.action === 'reschedule' ? 'Date-change request opened' : 'Cancellation request opened',
+      message: request.action === 'reschedule'
+        ? 'A patient requested a new appointment time and is waiting for the doctor’s review.'
+        : 'A patient cancellation request is waiting for the doctor’s review.',
       data: { appointmentId: String(request.appointment), refundRequestId: String(request._id) },
       dedupeKey: `refund-request:${request._id}:admin:${admin._id}:${type}`,
     })));
@@ -269,18 +282,63 @@ export class RefundRequestService {
     await Promise.all(admins.map((admin) => this.notificationService.createNotification({
       recipient: admin._id,
       type,
-      title: 'Refund request ready for final approval',
-      message: 'A doctor-approved refund request is ready for your review.',
+      title: request.action === 'reschedule' ? 'Date-change request ready for final approval' : 'Cancellation request ready for final approval',
+      message: request.action === 'reschedule'
+        ? 'A doctor-approved date-change request is ready for your review.'
+        : 'A doctor-approved cancellation request is ready for your review.',
       data: { appointmentId: String(request.appointment), refundRequestId: String(request._id) },
       dedupeKey: `refund-request:${request._id}:admin:${admin._id}:${type}`,
     })));
   }
 
+  async notifyDoctor(request, status) {
+    const message = status === 'admin_approved'
+      ? request.action === 'reschedule'
+        ? 'The administrator approved the date change. The original appointment is canceled; the replacement appointment will be confirmed after the patient completes payment.'
+        : 'The administrator approved the cancellation. The appointment is canceled and the patient’s refund is processing.'
+      : request.action === 'reschedule'
+        ? 'The administrator declined the date change. The original appointment remains confirmed and no replacement was created.'
+        : 'The administrator declined the cancellation. The original appointment remains confirmed.';
+    await this.notificationService.createNotification({
+      recipient: request.doctor,
+      type: 'refund_request_updated',
+      title: status === 'admin_approved' ? 'Appointment request approved' : 'Appointment request declined',
+      message,
+      data: { appointmentId: String(request.appointment), refundRequestId: String(request._id), status: request.status },
+      dedupeKey: `refund-request:${request._id}:doctor:${status}`,
+    });
+
+    const [doctor, appointment] = await Promise.all([
+      this.userModel.findById(request.doctor).select('email'),
+      this.appointmentModel.findById(request.appointment),
+    ]);
+    if (!doctor?.email) return;
+    try {
+      await this.emailDeliveryService.enqueue({
+        to: doctor.email,
+        ...refundRequestEmail({
+          recipientRole: 'doctor',
+          status,
+          action: request.action,
+          appointmentDate: appointmentDateLabel(appointment),
+          requestedDate: appointmentDateLabel(appointment, request.requestedStartAt),
+          decisionReason: request.rejectionReason,
+          reference: String(request.appointment),
+          url: `${clientUrl()}/doctor/appointments`,
+        }),
+        dedupeKey: `refund-request:${request._id}:doctor-email:${status}`,
+      });
+    } catch (error) {
+      console.error('Unable to queue doctor decision email', { code: safeErrorCode(error) });
+    }
+  }
+
   async notifyPatient(request, message, emailStatus) {
+    const requestLabel = request.action === 'reschedule' ? 'Date-change request' : 'Cancellation request';
     await this.notificationService.createNotification({
       recipient: request.patient,
       type: 'refund_request_updated',
-      title: 'Appointment request updated',
+      title: emailStatus === 'created' ? `${requestLabel} submitted` : `${requestLabel} updated`,
       message,
       data: { appointmentId: String(request.appointment), refundRequestId: String(request._id), status: request.status },
       dedupeKey: `refund-request:${request._id}:patient:${request.status}`,

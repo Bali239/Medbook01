@@ -166,3 +166,88 @@ test('patient request decisions are queued with dates, reason, and a stable even
   assert.match(emails[0].text, /November 8/);
   assert.equal(emails[0].dedupeKey, 'refund-request:request-1:patient-email:rejected');
 });
+
+test('patient date-change submission notifies the patient and doctor and alerts admins in-app', async () => {
+  const notifications = [];
+  const emails = [];
+  const appointment = {
+    _id: 'appointment-1',
+    patient: 'patient-1',
+    doctor: 'doctor-1',
+    status: 'confirmed',
+    appointmentStartAt: new Date('2026-11-05T05:00:00.000Z'),
+    doctorSnapshot: { name: 'Dr. Example', clinicTimeZone: 'Asia/Karachi' },
+  };
+  const requestId = 'request-1';
+  const requestModel = {
+    findOne: async () => null,
+    create: async (data) => ({
+      ...data,
+      _id: requestId,
+      toObject() { return { ...data, _id: requestId }; },
+    }),
+  };
+  const users = {
+    'patient-1': { _id: 'patient-1', email: 'patient@example.test' },
+    'doctor-1': { _id: 'doctor-1', email: 'doctor@example.test' },
+  };
+  const service = new RefundRequestService({
+    appointmentModel: { findById: async () => appointment },
+    paymentModel: { findOne: () => ({ sort: async () => ({ _id: 'payment-1', status: 'succeeded' }) }) },
+    requestModel,
+    userModel: {
+      findById: (id) => ({ select: async () => users[id] }),
+      find: () => ({ select: async () => [{ _id: 'admin-1' }] }),
+    },
+    bookingService: { validateSlot: async () => {} },
+    notificationService: { createNotification: async (notification) => notifications.push(notification) },
+    emailDeliveryService: { enqueue: async (email) => emails.push(email) },
+    now: () => Date.parse('2026-11-04T00:00:00.000Z'),
+  });
+
+  const result = await service.createForPatient('appointment-1', 'patient-1', {
+    action: 'reschedule',
+    reason: 'I need a later time.',
+    newStartAt: '2026-11-08T07:00:00.000Z',
+  });
+
+  assert.equal(result.status, 'doctor_pending');
+  assert.deepEqual(new Set(notifications.map(({ recipient }) => String(recipient))), new Set(['doctor-1', 'admin-1', 'patient-1']));
+  assert.deepEqual(new Set(emails.map(({ to }) => to)), new Set(['doctor@example.test', 'patient@example.test']));
+  assert.match(emails.find(({ to }) => to === 'doctor@example.test').text, /November 8/);
+  assert.match(emails.find(({ to }) => to === 'patient@example.test').text, /current appointment remains confirmed/);
+  assert.equal(emails.some(({ to }) => to === 'admin@example.test'), false);
+});
+
+test('final administrator decisions notify the doctor by in-app notification and email', async () => {
+  const notifications = [];
+  const emails = [];
+  const service = new RefundRequestService({
+    notificationService: { createNotification: async (notification) => notifications.push(notification) },
+    emailDeliveryService: { enqueue: async (email) => emails.push(email) },
+    userModel: { findById: () => ({ select: async () => ({ email: 'doctor@example.test' }) }) },
+    appointmentModel: {
+      findById: async () => ({
+        appointmentStartAt: new Date('2026-11-05T05:00:00.000Z'),
+        doctorSnapshot: { clinicTimeZone: 'Asia/Karachi' },
+      }),
+    },
+  });
+  const request = {
+    _id: 'request-2',
+    appointment: 'appointment-1',
+    doctor: 'doctor-1',
+    action: 'reschedule',
+    status: 'refund_pending',
+    requestedStartAt: new Date('2026-11-08T07:00:00.000Z'),
+  };
+
+  await service.notifyDoctor(request, 'admin_approved');
+
+  assert.equal(notifications.length, 1);
+  assert.match(notifications[0].message, /patient completes payment/);
+  assert.equal(emails.length, 1);
+  assert.equal(emails[0].dedupeKey, 'refund-request:request-2:doctor-email:admin_approved');
+  assert.match(emails[0].text, /original appointment is canceled/);
+  assert.match(emails[0].text, /November 8/);
+});

@@ -255,7 +255,7 @@ export const doctorApplicationEmail = ({ status, name, reason, url }) => {
   });
 };
 
-export const refundRequestEmail = ({ recipientRole, status, action, appointmentDate, requestedDate, reason, reference, url }) => {
+export const refundRequestEmail = ({ recipientRole, status, action, appointmentDate, requestedDate, reason, decisionReason, reference, url }) => {
   const actionLabel = action === 'reschedule' ? 'date-change request' : 'cancellation and refund request';
   const messages = {
     created: recipientRole === 'doctor'
@@ -263,6 +263,18 @@ export const refundRequestEmail = ({ recipientRole, status, action, appointmentD
       : `Your ${actionLabel} was submitted and is waiting for the doctor's review. Your current appointment remains confirmed while the request is under review.`,
     doctor_approved: 'The doctor approved your request. It is now waiting for final administrative review; your original appointment remains unchanged for now.',
     doctor_rejected: 'The doctor declined your request. Your original appointment remains unchanged.',
+    admin_approved: action === 'reschedule'
+      ? 'The administrator approved the date change. The original appointment is canceled and its refund is processing. The replacement appointment will be confirmed after the patient completes payment.'
+      : 'The administrator approved the cancellation. The appointment is canceled and the patient’s refund is processing.',
+    admin_rejected: action === 'reschedule'
+      ? 'The administrator declined the date change. The original appointment remains confirmed; no replacement appointment was created.'
+      : 'The administrator declined the cancellation. The original appointment remains confirmed.',
+    admin_approved: action === 'reschedule'
+      ? 'The administrator approved your date-change request. Your original appointment is canceled and its refund is processing. The patient must complete payment for the new appointment before it is confirmed.'
+      : 'The administrator approved the cancellation request. The appointment is canceled and the patient’s refund is processing.',
+    admin_rejected: action === 'reschedule'
+      ? 'The administrator declined the date-change request. The original appointment remains confirmed; no replacement appointment was created.'
+      : 'The administrator declined the cancellation request. The original appointment remains confirmed.',
     approved: action === 'reschedule'
       ? 'Your date-change request was approved. A new appointment is being prepared, and you must complete its payment. Your original appointment has been canceled and its refund is processing.'
       : 'Your cancellation request was approved. Your appointment is canceled and the full refund is processing.',
@@ -280,7 +292,7 @@ export const refundRequestEmail = ({ recipientRole, status, action, appointmentD
       { label: 'Current appointment', value: appointmentDate },
       { label: 'Requested appointment', value: requestedDate },
       { label: 'Patient reason', value: isDoctor ? reason : undefined },
-      { label: 'Decision reason', value: isDoctor ? undefined : reason },
+      { label: 'Decision reason', value: isDoctor ? decisionReason : reason },
       { label: 'Booking reference', value: reference },
       { label: 'Request status', value: status.replaceAll('_', ' ') },
     ],
