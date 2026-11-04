@@ -8,7 +8,6 @@ import {
 	initializePaymentSchema,
 	paginationSchema,
 	paymentIdParamsSchema,
-	refundCreateSchema,
 } from './payment.schema.js';
 
 const router = Router();
@@ -41,7 +40,6 @@ router.get('/me', protect, restrictTo('patient', 'admin'), validate(paginationSc
 router.get('/appointment/:appointmentId', protect, restrictTo('patient', 'admin'), validate(appointmentPaymentParamsSchema), paymentController.getByAppointment);
 router.post('/:paymentId/retry', protect, restrictTo('patient'), retryLimiter, validate(paymentIdParamsSchema), paymentController.retry);
 router.get('/:paymentId/refunds', protect, restrictTo('patient', 'admin'), validate(paymentIdParamsSchema), paymentController.getRefunds);
-router.post('/:paymentId/refunds', protect, restrictTo('admin'), validate(refundCreateSchema), paymentController.createRefund);
 router.get('/:paymentId', protect, restrictTo('patient', 'admin'), validate(paymentIdParamsSchema), paymentController.getById);
 router.post('/:paymentId/cancel', protect, restrictTo('patient'), validate(paymentIdParamsSchema), paymentController.cancel);
 
