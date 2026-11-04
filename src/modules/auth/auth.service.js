@@ -2,8 +2,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../../models/User.js';
 import { BadRequestError, UnauthorizedError } from '../../errors/AppError.js';
-import { createToken, hashToken, sendEmail } from './email.service.js';
+import { createToken, hashToken } from './email.service.js';
 import { env } from '../../config/env.js';
+import { EmailDeliveryService } from '../notifications/email-delivery.service.js';
+import { passwordResetEmail, verificationEmail } from '../notifications/email-templates.js';
 
 const signToken = (id, sessionVersion = 0) => {
   return jwt.sign({ id, sessionVersion }, process.env.JWT_SECRET || 'dev-secret', {
@@ -12,6 +14,10 @@ const signToken = (id, sessionVersion = 0) => {
 };
 
 export class AuthService {
+  constructor({ emailDeliveryService = new EmailDeliveryService() } = {}) {
+    this.emailDeliveryService = emailDeliveryService;
+  }
+
   async register(data) {
     const { name, email, password, role } = data;
     
@@ -34,11 +40,11 @@ export class AuthService {
     });
     
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
-    await sendEmail({
+    const email = verificationEmail({ name: user.name, url: `${clientUrl}/verify-email?token=${verificationToken}` });
+    await this.emailDeliveryService.enqueue({
       to: user.email,
-      subject: 'Verify your MedBook email',
-      text: `Verify your email: ${clientUrl}/verify-email?token=${verificationToken}`,
-      html: `<p>Welcome to MedBook.</p><p><a href="${clientUrl}/verify-email?token=${verificationToken}">Verify your email address</a></p>`,
+      ...email,
+      dedupeKey: `auth:verification:${user._id}:${hashToken(verificationToken)}`,
     });
     const token = signToken(user._id, user.sessionVersion);
     
@@ -91,11 +97,11 @@ export class AuthService {
     user.passwordResetExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
     await user.save();
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
-    await sendEmail({
+    const emailMessage = passwordResetEmail({ name: user.name, url: `${clientUrl}/reset-password?token=${token}` });
+    await this.emailDeliveryService.enqueue({
       to: user.email,
-      subject: 'Reset your MedBook password',
-      text: `Reset your password: ${clientUrl}/reset-password?token=${token}`,
-      html: `<p><a href="${clientUrl}/reset-password?token=${token}">Reset your password</a></p>`,
+      ...emailMessage,
+      dedupeKey: `auth:password-reset:${user._id}:${hashToken(token)}`,
     });
   }
 

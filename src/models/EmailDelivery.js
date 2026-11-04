@@ -7,6 +7,7 @@ const emailDeliverySchema = new mongoose.Schema(
     subject: { type: String, required: true, maxlength: 200 },
     text: { type: String, required: true, maxlength: 10000, select: false },
     html: { type: String, maxlength: 20000, select: false },
+    appointmentReminderFor: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
     status: { type: String, enum: ['queued', 'processing', 'sent', 'failed', 'skipped'], default: 'queued', index: true },
     attempts: { type: Number, min: 0, default: 0 },
     nextAttemptAt: { type: Date, default: Date.now, index: true },

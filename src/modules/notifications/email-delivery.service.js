@@ -1,9 +1,11 @@
 import EmailDelivery from '../../models/EmailDelivery.js';
+import Appointment from '../../models/Appointment.js';
 import { sendEmail } from '../auth/email.service.js';
 
 export class EmailDeliveryService {
-  constructor({ deliveryModel = EmailDelivery, emailSender = sendEmail, now = Date.now, logger = console } = {}) {
+  constructor({ deliveryModel = EmailDelivery, appointmentModel = Appointment, emailSender = sendEmail, now = Date.now, logger = console } = {}) {
     this.deliveryModel = deliveryModel;
+    this.appointmentModel = appointmentModel;
     this.emailSender = emailSender;
     this.now = now;
     this.logger = logger;
@@ -37,10 +39,23 @@ export class EmailDeliveryService {
         $inc: { attempts: 1 },
       },
       { sort: { createdAt: 1 }, returnDocument: 'after' },
-    ).select('+to +text +html');
+    ).select('+to +text +html +appointmentReminderFor');
     if (!delivery) return false;
 
     try {
+      if (delivery.appointmentReminderFor) {
+        const appointment = await this.appointmentModel.findById(delivery.appointmentReminderFor).select('status');
+        if (appointment?.status !== 'confirmed') {
+          await this.deliveryModel.updateOne(
+            { _id: delivery._id, status: 'processing' },
+            {
+              $set: { status: 'skipped', skippedAt: new Date(this.now()) },
+              $unset: { leaseExpiresAt: 1, lastError: 1, to: 1, text: 1, html: 1 },
+            },
+          );
+          return true;
+        }
+      }
       const result = await this.emailSender({
         to: delivery.to,
         subject: delivery.subject,
@@ -54,7 +69,7 @@ export class EmailDeliveryService {
           $set: delivered
             ? { status: 'sent', sentAt: new Date(this.now()) }
             : { status: 'skipped', skippedAt: new Date(this.now()) },
-          $unset: { leaseExpiresAt: 1, lastError: 1 },
+          $unset: { leaseExpiresAt: 1, lastError: 1, to: 1, text: 1, html: 1 },
         },
       );
     } catch (error) {

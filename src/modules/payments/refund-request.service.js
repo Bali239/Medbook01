@@ -8,6 +8,24 @@ import { AppointmentBookingService } from '../appointments/appointment-booking.s
 import { PaymentInitializationService } from './payment-initialization.service.js';
 import { RefundService } from './refund.service.js';
 import { NotificationService } from '../notifications/notification.service.js';
+import { EmailDeliveryService } from '../notifications/email-delivery.service.js';
+import { refundRequestEmail } from '../notifications/email-templates.js';
+
+const appointmentDateLabel = (appointment, date = appointment?.appointmentStartAt) => {
+  if (!date) return undefined;
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: appointment.doctorSnapshot?.clinicTimeZone || 'UTC',
+    }).format(date);
+  } catch {
+    return new Date(date).toISOString();
+  }
+};
+
+const clientUrl = () => process.env.CLIENT_URL || 'http://localhost:3000';
+const safeErrorCode = (error) => /^[a-z0-9_]{1,60}$/i.test(error?.code || '') ? error.code : 'email_enqueue_failed';
 
 const activeStatuses = ['doctor_pending', 'admin_pending', 'refund_pending'];
 
@@ -21,6 +39,7 @@ export class RefundRequestService {
     paymentInitializationService = new PaymentInitializationService(),
     refundService = new RefundService(),
     notificationService = new NotificationService(),
+    emailDeliveryService = new EmailDeliveryService(),
     now = Date.now,
   } = {}) {
     this.appointmentModel = appointmentModel;
@@ -31,6 +50,7 @@ export class RefundRequestService {
     this.paymentInitializationService = paymentInitializationService;
     this.refundService = refundService;
     this.notificationService = notificationService;
+    this.emailDeliveryService = emailDeliveryService;
     this.now = now;
   }
 
@@ -113,7 +133,11 @@ export class RefundRequestService {
       reason: reason?.trim(),
     });
     await request.save();
-    await this.notifyPatient(request, decision === 'approve' ? 'Your request is awaiting final admin approval.' : `Your request was declined: ${reason.trim()}`);
+    await this.notifyPatient(
+      request,
+      decision === 'approve' ? 'Your request is awaiting final admin approval.' : `Your request was declined: ${reason.trim()}`,
+      decision === 'approve' ? 'doctor_approved' : 'doctor_rejected',
+    );
     if (decision === 'approve') await this.notifyAdmins(request, 'refund_request_admin_review');
     return this.toDto(request);
   }
@@ -130,7 +154,7 @@ export class RefundRequestService {
       request.rejectionReason = reason.trim();
       request.statusHistory.push({ status: 'rejected', actor: adminId, role: 'admin', reason: reason.trim() });
       await request.save();
-      await this.notifyPatient(request, `Your request was declined: ${reason.trim()}`);
+      await this.notifyPatient(request, `Your request was declined: ${reason.trim()}`, 'rejected');
       return this.toDto(request);
     }
 
@@ -188,7 +212,7 @@ export class RefundRequestService {
     await request.save();
     await this.notifyPatient(request, request.action === 'reschedule'
       ? 'Your date-change request was approved. Complete payment for the new appointment; your original payment refund is processing.'
-      : 'Your cancellation was approved. Your full refund is processing.');
+      : 'Your cancellation was approved. Your full refund is processing.', 'approved');
     return { ...this.toDto(request), refundStatus: refund.status, replacement };
   }
 
@@ -205,6 +229,30 @@ export class RefundRequestService {
       data: { appointmentId: String(request.appointment), refundRequestId: String(request._id) },
       dedupeKey: `refund-request:${request._id}:doctor:${type}`,
     });
+    const [doctor, appointment] = await Promise.all([
+      this.userModel.findById(request.doctor).select('email'),
+      this.appointmentModel.findById(request.appointment),
+    ]);
+    if (doctor?.email) {
+      try {
+        await this.emailDeliveryService.enqueue({
+          to: doctor.email,
+          ...refundRequestEmail({
+            recipientRole: 'doctor',
+            status: 'created',
+            action: request.action,
+            appointmentDate: appointmentDateLabel(appointment),
+            requestedDate: appointmentDateLabel(appointment, request.requestedStartAt),
+            reason: request.reason,
+            reference: String(request.appointment),
+            url: `${clientUrl()}/doctor/appointments`,
+          }),
+          dedupeKey: `refund-request:${request._id}:doctor-email:${type}`,
+        });
+      } catch (error) {
+        console.error('Unable to queue doctor request email', { code: safeErrorCode(error) });
+      }
+    }
     const admins = await this.userModel.find({ role: 'admin', isActive: true }).select('_id');
     await Promise.all(admins.map((admin) => this.notificationService.createNotification({
       recipient: admin._id,
@@ -228,7 +276,7 @@ export class RefundRequestService {
     })));
   }
 
-  async notifyPatient(request, message) {
+  async notifyPatient(request, message, emailStatus) {
     await this.notificationService.createNotification({
       recipient: request.patient,
       type: 'refund_request_updated',
@@ -237,5 +285,28 @@ export class RefundRequestService {
       data: { appointmentId: String(request.appointment), refundRequestId: String(request._id), status: request.status },
       dedupeKey: `refund-request:${request._id}:patient:${request.status}`,
     });
+    const [patient, appointment] = await Promise.all([
+      this.userModel.findById(request.patient).select('email'),
+      this.appointmentModel.findById(request.appointment),
+    ]);
+    if (!patient?.email) return;
+    try {
+      await this.emailDeliveryService.enqueue({
+        to: patient.email,
+        ...refundRequestEmail({
+          recipientRole: 'patient',
+          status: emailStatus,
+          action: request.action,
+          appointmentDate: appointmentDateLabel(appointment),
+          requestedDate: appointmentDateLabel(appointment, request.requestedStartAt),
+          reason: request.rejectionReason,
+          reference: String(request.appointment),
+          url: `${clientUrl()}/patient/appointments?appointment=${request.appointment}`,
+        }),
+        dedupeKey: `refund-request:${request._id}:patient-email:${emailStatus}`,
+      });
+    } catch (error) {
+      console.error('Unable to queue patient request email', { code: safeErrorCode(error) });
+    }
   }
 }

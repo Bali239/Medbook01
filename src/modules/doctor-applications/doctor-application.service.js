@@ -11,7 +11,8 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../errors/AppError.js';
-import { sendEmail } from '../auth/email.service.js';
+import { EmailDeliveryService } from '../notifications/email-delivery.service.js';
+import { doctorApplicationEmail } from '../notifications/email-templates.js';
 import {
   fetchPrivateDoctorApplicationAsset,
   removeDoctorApplicationAsset,
@@ -172,7 +173,7 @@ const removeUnreferencedAssets = async (userId, before, after) => {
   }));
 };
 
-const notifyApplicant = async (user, status, reason = '', applicationId = null) => {
+const notifyApplicant = async (user, status, reason = '', applicationId = null, eventAt = new Date()) => {
   const titleByStatus = {
     submitted: 'Doctor application submitted',
     under_review: 'Doctor application under review',
@@ -198,17 +199,21 @@ const notifyApplicant = async (user, status, reason = '', applicationId = null) 
     console.error('Unable to persist doctor application notification', error.message);
   }
 
-  if (env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_SENDER && env.GMAIL_REFRESH_TOKEN) {
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: title,
-        text: message,
-        html: `<p>${message.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>`,
-      });
-    } catch (error) {
-      console.error('Unable to send doctor application email', error.message);
-    }
+  const email = doctorApplicationEmail({
+    status,
+    name: user.name,
+    reason,
+    url: `${env.CLIENT_URL || 'http://localhost:3000'}/doctor/profile`,
+  });
+  try {
+    await new EmailDeliveryService().enqueue({
+      to: user.email,
+      ...email,
+      dedupeKey: `doctor-application:${applicationId}:${status}:${new Date(eventAt).getTime()}`,
+    });
+  } catch (error) {
+    const code = /^[a-z0-9_]{1,60}$/i.test(error?.code || '') ? error.code : 'email_enqueue_failed';
+    console.error('Unable to queue doctor application email', { code });
   }
 };
 
@@ -401,7 +406,7 @@ export class DoctorApplicationService {
     ).populate('specialty', 'name slug');
 
     if (!submitted) throw new ConflictError('Application status changed; reload and try again');
-    await notifyApplicant(user, 'submitted', '', submitted._id);
+    await notifyApplicant(user, 'submitted', '', submitted._id, submitted.submittedAt);
     await notifyAdminsOfSubmission(submitted, user);
     return summarizeApplication(submitted);
   }
@@ -505,7 +510,7 @@ export class DoctorApplicationService {
       console.error('Unable to record doctor application review audit event', error.message);
     }
 
-    await notifyApplicant(user, status, reason, application._id);
+    await notifyApplicant(user, status, reason, application._id, application.reviewedAt);
     return this.getForAdmin(applicationId);
   }
 

@@ -3,14 +3,13 @@ import { EmailDeliveryService } from '../notifications/email-delivery.service.js
 import Appointment from '../../models/Appointment.js';
 import User from '../../models/User.js';
 import { env } from '../../config/env.js';
-
-const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-}[character]));
+import {
+  appointmentCancelledEmail,
+  appointmentConfirmedEmail,
+  appointmentUnavailableEmail,
+  paymentFailedEmail,
+  refundUpdatedEmail,
+} from '../notifications/email-templates.js';
 
 const appointmentDateLabel = (appointment) => {
   if (!appointment?.appointmentStartAt) return 'your appointment';
@@ -24,6 +23,24 @@ const appointmentDateLabel = (appointment) => {
     return appointment.appointmentStartAt.toISOString();
   }
 };
+
+const amountLabel = (amountMinor, currency = 'usd') => {
+  if (amountMinor === undefined || amountMinor === null || !Number.isSafeInteger(Number(amountMinor))) return undefined;
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(Number(amountMinor) / 100);
+  } catch {
+    return undefined;
+  }
+};
+
+const appointmentsUrl = (role) => `${env.CLIENT_URL || 'http://localhost:3000'}/${role}/appointments`;
+const patientPaymentsUrl = () => `${env.CLIENT_URL || 'http://localhost:3000'}/patient/payments`;
+
+const clinicLabel = (appointment) => [
+  appointment.doctorSnapshot?.clinicName,
+  appointment.doctorSnapshot?.clinicAddress,
+  appointment.doctorSnapshot?.clinicCity,
+].filter(Boolean).join(', ') || undefined;
 
 export class PaymentNotificationService {
   constructor({ notificationService = new NotificationService(), emailDeliveryService = new EmailDeliveryService(), appointmentModel = Appointment, userModel = User } = {}) {
@@ -68,9 +85,16 @@ export class PaymentNotificationService {
       });
       await this.emailDeliveryService.enqueue({
         to: patient.email,
-        subject: 'Your MedBook appointment is confirmed',
-        text: `Your appointment with ${appointment.doctorSnapshot?.name || 'your doctor'} is confirmed for ${when}. Payment reference: ${payment.stripePaymentIntentId}.`,
-        html: `<p>Your appointment with ${escapeHtml(appointment.doctorSnapshot?.name || 'your doctor')} is confirmed for <strong>${escapeHtml(when)}</strong>.</p><p>Payment reference: ${escapeHtml(payment.stripePaymentIntentId)}</p>`,
+        ...appointmentConfirmedEmail({
+          recipientRole: 'patient',
+          recipientName: patient.name,
+          doctorName: appointment.doctorSnapshot?.name || 'your doctor',
+          appointmentDate: when,
+          clinic: clinicLabel(appointment),
+          amount: amountLabel(payment.amountMinor, payment.currency),
+          reference,
+          url: appointmentsUrl('patient'),
+        }),
         dedupeKey: `appointment:${reference}:confirmed:patient`,
       });
     }
@@ -85,9 +109,17 @@ export class PaymentNotificationService {
       });
       await this.emailDeliveryService.enqueue({
         to: doctor.email,
-        subject: 'A MedBook appointment was confirmed',
-        text: `An appointment was confirmed for ${when}. Open your MedBook dashboard for details.`,
-        html: `<p>An appointment was confirmed for <strong>${when}</strong>.</p><p>Open your MedBook dashboard for details.</p>`,
+        ...appointmentConfirmedEmail({
+          recipientRole: 'doctor',
+          recipientName: doctor.name,
+          doctorName: appointment.doctorSnapshot?.name || doctor.name,
+          patientName: patient?.name || 'a patient',
+          appointmentDate: when,
+          clinic: clinicLabel(appointment),
+          amount: amountLabel(payment.amountMinor, payment.currency),
+          reference,
+          url: appointmentsUrl('doctor'),
+        }),
         dedupeKey: `appointment:${reference}:confirmed:doctor`,
       });
     }
@@ -103,6 +135,7 @@ export class PaymentNotificationService {
   async notifyUnfulfillablePayment(payment) {
     const patient = await this.userModel.findById(payment.patient).select('name email');
     if (!patient) return;
+    const appointment = await this.appointmentModel.findById(payment.appointment);
     const dedupeKey = `payment:${payment._id}:appointment-unavailable`;
     await this.notificationService.createNotification({
       recipient: patient._id,
@@ -121,16 +154,20 @@ export class PaymentNotificationService {
     });
     await this.emailDeliveryService.enqueue({
       to: patient.email,
-      subject: 'MedBook payment refund started',
-      text: 'Your payment was received after the appointment time became unavailable. A full refund has been started.',
-      html: '<p>Your payment was received after the appointment time became unavailable. A full refund has been started.</p>',
+      ...appointmentUnavailableEmail({
+        appointmentDate: appointmentDateLabel(appointment),
+        amount: amountLabel(payment.amountMinor, payment.currency),
+        reference: String(payment.appointment),
+        url: patientPaymentsUrl(),
+      }),
       dedupeKey,
     });
   }
 
   async notifyPaymentFailed(payment) {
-    const patient = await this.userModel.findById(payment.patient).select('email');
+    const patient = await this.userModel.findById(payment.patient).select('name email');
     if (!patient) return;
+    const appointment = await this.appointmentModel.findById(payment.appointment);
     const dedupeKey = `payment:${payment._id}:failed`;
     const message = 'Your appointment payment was not completed. You can retry from your payment history.';
     await this.notificationService.createNotification({
@@ -151,22 +188,38 @@ export class PaymentNotificationService {
     await this.emailDeliveryService.enqueue({
       to: patient.email,
       subject: 'MedBook payment was not completed',
-      text: message,
-      html: `<p>${escapeHtml(message)}</p>`,
+      ...paymentFailedEmail({
+        appointmentDate: appointmentDateLabel(appointment),
+        amount: amountLabel(payment.amountMinor, payment.currency),
+        reference: String(payment.appointment),
+        url: patientPaymentsUrl(),
+      }),
       dedupeKey,
     });
   }
 
   async notifyAppointmentCancelled(appointment, { refundEligible }) {
     const [patient, doctor] = await Promise.all([
-      this.userModel.findById(appointment.patient).select('email'),
-      this.userModel.findById(appointment.doctor).select('email'),
+      this.userModel.findById(appointment.patient).select('name email'),
+      this.userModel.findById(appointment.doctor).select('name email'),
     ]);
     const appointmentId = String(appointment._id);
     const when = appointmentDateLabel(appointment);
-    const patientMessage = refundEligible
-      ? `Your appointment for ${when} was canceled. A full refund is being processed.`
-      : `Your appointment for ${when} was canceled. It was outside the automatic refund window.`;
+    const refundStatus = {
+      refund_pending: 'pending',
+      refunded: 'succeeded',
+      partially_refunded: 'partially_refunded',
+    }[appointment.paymentStatus];
+    const refundDescription = !refundEligible
+      ? 'No automatic refund was started under the current policy.'
+      : refundStatus === 'succeeded'
+        ? 'Your refund is complete.'
+        : refundStatus === 'pending'
+          ? 'Your refund is processing and is not complete yet.'
+          : refundStatus === 'partially_refunded'
+            ? 'A partial refund has been recorded. Review your payment details for the amount.'
+            : 'A refund has not yet been confirmed. Review your payment details for the latest status.';
+    const patientMessage = `Your appointment for ${when} was canceled. ${refundDescription}`;
 
     await this.notificationService.createNotification({
       recipient: appointment.patient,
@@ -179,9 +232,17 @@ export class PaymentNotificationService {
     if (patient) {
       await this.emailDeliveryService.enqueue({
         to: patient.email,
-        subject: 'Your MedBook appointment was canceled',
-        text: patientMessage,
-        html: `<p>${escapeHtml(patientMessage)}</p>`,
+        ...appointmentCancelledEmail({
+          recipientRole: 'patient',
+          recipientName: patient.name,
+          doctorName: appointment.doctorSnapshot?.name || 'your doctor',
+          appointmentDate: when,
+          reference: appointmentId,
+          reason: appointment.cancellation?.reason,
+          refundEligible,
+          refundStatus,
+          url: `${appointmentsUrl('patient')}?appointment=${appointmentId}`,
+        }),
         dedupeKey: `appointment:${appointmentId}:cancelled:patient`,
       });
     }
@@ -196,9 +257,17 @@ export class PaymentNotificationService {
       });
       await this.emailDeliveryService.enqueue({
         to: doctor.email,
-        subject: 'A MedBook appointment was canceled',
-        text: `The appointment scheduled for ${when} was canceled.`,
-        html: `<p>The appointment scheduled for ${escapeHtml(when)} was canceled.</p>`,
+        ...appointmentCancelledEmail({
+          recipientRole: 'doctor',
+          recipientName: doctor.name,
+          patientName: patient?.name || 'a patient',
+          appointmentDate: when,
+          reference: appointmentId,
+          reason: appointment.cancellation?.reason,
+          refundEligible,
+          refundStatus,
+          url: `${appointmentsUrl('doctor')}?appointment=${appointmentId}`,
+        }),
         dedupeKey: `appointment:${appointmentId}:cancelled:doctor`,
       });
     }
@@ -217,7 +286,9 @@ export class PaymentNotificationService {
       ? 'Your appointment refund has been completed.'
       : refund.status === 'failed'
         ? 'Your appointment refund could not be completed yet. Our team has been notified.'
-        : 'Your appointment refund is being processed.';
+        : refund.status === 'canceled'
+          ? 'Your appointment refund was canceled. Review your payment details or contact support if this is unexpected.'
+          : 'Your appointment refund is being processed.';
     await this.notificationService.createNotification({
       recipient: refund.patient,
       type: 'refund_status_changed',
@@ -237,9 +308,12 @@ export class PaymentNotificationService {
     if (patient) {
       await this.emailDeliveryService.enqueue({
         to: patient.email,
-        subject: 'MedBook refund status updated',
-        text: message,
-        html: `<p>${escapeHtml(message)}</p>`,
+        ...refundUpdatedEmail({
+          status: refund.status,
+          amount: amountLabel(refund.amountMinor, refund.currency),
+          reference: String(refund.appointment),
+          url: patientPaymentsUrl(),
+        }),
         dedupeKey,
       });
     }
