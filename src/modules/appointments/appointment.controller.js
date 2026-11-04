@@ -12,6 +12,11 @@ export class AppointmentController {
     ApiResponse.success(res, result, 'Doctor appointments loaded');
   });
 
+  updateStatus = catchAsync(async (req, res) => {
+    const result = await appointmentLifecycleService.updateStatus(req.params.appointmentId, req.user, req.body);
+    ApiResponse.success(res, result, 'Appointment status updated');
+  });
+
   cancel = catchAsync(async (req, res) => {
     const result = await appointmentLifecycleService.cancel(req.params.appointmentId, req.user, req.body);
     ApiResponse.success(res, result, 'Appointment cancellation processed');

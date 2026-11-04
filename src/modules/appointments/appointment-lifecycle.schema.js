@@ -5,6 +5,14 @@ export const cancelAppointmentSchema = {
   body: z.object({ reason: z.string().trim().max(1000).optional() }).strict(),
 };
 
+export const updateAppointmentStatusSchema = {
+  params: z.object({ appointmentId: z.string().regex(/^[a-f\d]{24}$/i) }),
+  body: z.object({
+    status: z.enum(['confirmed', 'cancelled', 'completed']),
+    reason: z.string().trim().max(1000).optional(),
+  }).strict(),
+};
+
 export const listDoctorAppointmentsSchema = {
   query: z.object({
     page: z.coerce.number().int().min(1).default(1),

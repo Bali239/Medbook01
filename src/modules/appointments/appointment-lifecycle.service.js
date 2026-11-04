@@ -19,6 +19,42 @@ export class AppointmentLifecycleService {
     this.now = now;
   }
 
+  async updateStatus(appointmentId, actor, { status, reason } = {}) {
+    const appointment = await this.appointmentModel.findById(appointmentId);
+    if (!appointment) throw new NotFoundError('We could not find this appointment.');
+    if (actor.role !== 'doctor' || String(appointment.doctor) !== String(actor.id)) {
+      throw new ForbiddenError('You can only update your own appointments.');
+    }
+
+    if (status === 'cancelled') {
+      return this.cancel(appointmentId, actor, { reason: reason || 'Cancelled by doctor.' });
+    }
+    if (status === 'confirmed') {
+      if (appointment.status !== 'pending') {
+        throw new ConflictError('Only pending appointments can be confirmed.');
+      }
+      appointment.status = 'confirmed';
+    } else if (status === 'completed') {
+      if (appointment.status !== 'confirmed') {
+        throw new ConflictError('Only confirmed appointments can be marked complete.');
+      }
+      const appointmentStart = appointment.appointmentStartAt
+        || new Date(`${appointment.appointmentDate.toISOString().slice(0, 10)}T${appointment.startTime}:00.000Z`);
+      if (appointmentStart.valueOf() > this.now()) {
+        throw new ConflictError('This appointment has not started yet. You can mark it complete after the scheduled start time.');
+      }
+      appointment.status = 'completed';
+    }
+
+    await appointment.save();
+    return {
+      ...appointment.toObject(),
+      id: String(appointment._id),
+      appointmentId: String(appointment._id),
+      status: appointment.status,
+    };
+  }
+
   async cancel(appointmentId, actor, { reason } = {}) {
     if (['doctor', 'admin'].includes(actor.role) && !reason?.trim()) {
       throw new BadRequestError('A cancellation reason is required.');
