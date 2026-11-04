@@ -5,6 +5,7 @@ import Payment from '../../models/Payment.js';
 import SlotHold from '../../models/SlotHold.js';
 import Refund from '../../models/Refund.js';
 import User from '../../models/User.js';
+import RefundRequest from '../../models/RefundRequest.js';
 
 const paymentDto = (payment) => ({
   id: String(payment._id),
@@ -21,13 +22,15 @@ const paymentDto = (payment) => ({
   statusHistory: payment.statusHistory,
   createdAt: payment.createdAt,
   updatedAt: payment.updatedAt,
+  refundRequestStatus: payment.refundRequestStatus,
 });
 
 export class PaymentQueryService {
-  constructor({ paymentModel = Payment, appointmentModel = Appointment, userModel = User, stripeClientProvider = getStripeClient } = {}) {
+  constructor({ paymentModel = Payment, appointmentModel = Appointment, userModel = User, refundRequestModel = RefundRequest, stripeClientProvider = getStripeClient } = {}) {
     this.paymentModel = paymentModel;
     this.appointmentModel = appointmentModel;
     this.userModel = userModel;
+    this.refundRequestModel = refundRequestModel;
     this.stripeClientProvider = stripeClientProvider;
   }
 
@@ -36,15 +39,18 @@ export class PaymentQueryService {
   }
 
   async toDto(payment, actor) {
-    const [appointment, hold, patient] = await Promise.all([
+    const [appointment, hold, patient, refundRequest] = await Promise.all([
       this.appointmentModel.findById(payment.appointment),
       SlotHold.findOne({ appointment: payment.appointment }),
       actor.role === 'admin'
         ? this.userModel.findById(payment.patient).select('name email')
         : Promise.resolve(null),
+      this.refundRequestModel.findOne({ appointment: payment.appointment, status: { $in: ['doctor_pending', 'admin_pending', 'refund_pending'] } }).select('status action'),
     ]);
     return {
       ...paymentDto(payment),
+      refundRequestStatus: refundRequest?.status || null,
+      refundRequestAction: refundRequest?.action || null,
       ...(patient ? { patient: { id: String(patient._id), name: patient.name, email: patient.email } } : {}),
       appointmentSummary: appointment ? {
         appointmentDate: appointment.appointmentDate,

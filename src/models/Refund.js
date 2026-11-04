@@ -14,6 +14,7 @@ const refundSchema = new mongoose.Schema(
   {
     payment: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment', required: true, index: true },
     appointment: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', required: true, index: true },
+    refundRequest: { type: mongoose.Schema.Types.ObjectId, ref: 'RefundRequest', index: true },
     patient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     amountMinor: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
     currency: { type: String, required: true, lowercase: true, enum: ['usd'] },

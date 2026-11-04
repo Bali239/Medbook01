@@ -6,19 +6,21 @@ import AuditLog from '../../models/AuditLog.js';
 import Appointment from '../../models/Appointment.js';
 import { PaymentNotificationService } from './payment-notification.service.js';
 import Invoice from '../../models/Invoice.js';
+import RefundRequest from '../../models/RefundRequest.js';
 
 export class RefundService {
-  constructor({ stripeClientProvider = getStripeClient, paymentModel = Payment, refundModel = Refund, auditLogModel = AuditLog, appointmentModel = Appointment, invoiceModel = Invoice, paymentNotificationService = new PaymentNotificationService() } = {}) {
+  constructor({ stripeClientProvider = getStripeClient, paymentModel = Payment, refundModel = Refund, refundRequestModel = RefundRequest, auditLogModel = AuditLog, appointmentModel = Appointment, invoiceModel = Invoice, paymentNotificationService = new PaymentNotificationService() } = {}) {
     this.stripeClientProvider = stripeClientProvider;
     this.paymentModel = paymentModel;
     this.refundModel = refundModel;
+    this.refundRequestModel = refundRequestModel;
     this.auditLogModel = auditLogModel;
     this.appointmentModel = appointmentModel;
     this.invoiceModel = invoiceModel;
     this.paymentNotificationService = paymentNotificationService;
   }
 
-  async createFullRefund({ payment, reason, adminReason, initiatedBy, idempotencyKey }) {
+  async createFullRefund({ payment, reason, adminReason, initiatedBy, idempotencyKey, refundRequest }) {
     const existing = await this.refundModel.findOne({ idempotencyKey });
     if (existing) {
       if (existing.status !== 'pending' || existing.stripeRefundId) return existing;
@@ -39,10 +41,11 @@ export class RefundService {
       adminReason,
       initiatedBy,
       idempotencyKey,
+      refundRequest,
     });
   }
 
-  async createRefund({ payment, amountMinor, reason, adminReason, initiatedBy, idempotencyKey }) {
+  async createRefund({ payment, amountMinor, reason, adminReason, initiatedBy, idempotencyKey, refundRequest }) {
     let existing = await this.refundModel.findOne({ idempotencyKey });
     if (existing) {
       if (existing.amountMinor !== amountMinor) {
@@ -90,6 +93,7 @@ export class RefundService {
       refund = await this.refundModel.create({
         payment: payment._id,
         appointment: payment.appointment,
+        refundRequest,
         patient: payment.patient,
         amountMinor,
         currency: payment.currency,
@@ -205,6 +209,13 @@ export class RefundService {
       { $set: { paymentStatus: payment.refundStatus === 'refunded' ? 'refunded' : payment.refundedAmountMinor > 0 ? 'partially_refunded' : 'paid' } },
     );
     await this.paymentNotificationService.notifyRefundUpdated(refund, payment);
+
+    if (refund.refundRequest) {
+      await this.refundRequestModel.updateOne(
+        { _id: refund.refundRequest },
+        { $set: { status: nextStatus === 'succeeded' ? 'completed' : nextStatus === 'failed' || nextStatus === 'canceled' ? 'refund_failed' : 'refund_pending' }, $push: { statusHistory: { status: nextStatus === 'succeeded' ? 'completed' : nextStatus === 'failed' || nextStatus === 'canceled' ? 'refund_failed' : 'refund_pending', role: 'system', reason: refund.failureCode } } },
+      );
+    }
 
     return refund;
   }

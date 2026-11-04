@@ -5,6 +5,23 @@ export const cancelAppointmentSchema = {
   body: z.object({ reason: z.string().trim().max(1000).optional() }).strict(),
 };
 
+export const refundRequestSchema = {
+  params: z.object({ appointmentId: z.string().regex(/^[a-f\d]{24}$/i) }),
+  body: z.object({
+    action: z.enum(['cancel', 'reschedule']),
+    reason: z.string().trim().max(1000).optional(),
+    newStartAt: z.string().datetime().optional(),
+  }).strict().superRefine((value, context) => {
+    if (value.action === 'reschedule' && !value.newStartAt) context.addIssue({ code: z.ZodIssueCode.custom, path: ['newStartAt'], message: 'A new appointment time is required.' });
+    if (value.action === 'cancel' && value.newStartAt) context.addIssue({ code: z.ZodIssueCode.custom, path: ['newStartAt'], message: 'A new appointment time is not valid for cancellation.' });
+  }),
+};
+
+export const refundRequestDecisionSchema = {
+  params: z.object({ requestId: z.string().regex(/^[a-f\d]{24}$/i) }),
+  body: z.object({ decision: z.enum(['approve', 'reject']), reason: z.string().trim().max(1000).optional() }).strict(),
+};
+
 export const updateAppointmentStatusSchema = {
   params: z.object({ appointmentId: z.string().regex(/^[a-f\d]{24}$/i) }),
   body: z.object({

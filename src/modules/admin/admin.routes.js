@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { AdminController } from './admin.controller.js';
 import { protect } from '../../middleware/auth.js';
 import { restrictTo } from '../../middleware/auth.js';
+import { validate } from '../../middleware/validate.js';
+import { refundRequestDecisionSchema } from '../appointments/appointment-lifecycle.schema.js';
 
 const router = Router();
 const adminController = new AdminController();
@@ -20,5 +22,7 @@ router.get('/doctors', adminController.getDoctors);
 router.get('/appointments', adminController.getAppointments);
 router.get('/appointments/:appointmentId', adminController.getAppointment);
 router.get('/audit-logs', adminController.getAuditLogs);
+router.get('/refund-requests', adminController.getRefundRequests);
+router.post('/refund-requests/:requestId/decision', validate(refundRequestDecisionSchema), adminController.adminRefundDecision);
 
 export default router;

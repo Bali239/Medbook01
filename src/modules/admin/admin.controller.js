@@ -1,8 +1,10 @@
 import { AdminService } from './admin.service.js';
 import { catchAsync } from '../../utils/catchAsync.js';
 import { ApiResponse } from '../../utils/apiResponse.js';
+import { RefundRequestService } from '../payments/refund-request.service.js';
 
 const adminService = new AdminService();
+const refundRequestService = new RefundRequestService();
 
 export class AdminController {
   getUsers = catchAsync(async (req, res) => {
@@ -63,5 +65,15 @@ export class AdminController {
   getStats = catchAsync(async (req, res) => {
     const stats = await adminService.getStats();
     ApiResponse.success(res, stats, 'Stats retrieved successfully');
+  });
+
+  getRefundRequests = catchAsync(async (req, res) => {
+    const result = await refundRequestService.listForAdmin(req.query);
+    ApiResponse.success(res, result, 'Refund requests loaded');
+  });
+
+  adminRefundDecision = catchAsync(async (req, res) => {
+    const result = await refundRequestService.adminDecision(req.params.requestId, req.user.id, req.body);
+    ApiResponse.success(res, result, 'Refund request processed');
   });
 }
