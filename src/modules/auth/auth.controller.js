@@ -14,6 +14,11 @@ export class AuthController {
     const result = await authService.register(req.body);
     ApiResponse.success(res, result, 'Registration successful', 201);
   });
+
+  completeGoogleLogin = catchAsync(async (req, res) => {
+    const result = await authService.completeGoogleLogin(req.body.token, req.body.role);
+    ApiResponse.success(res, result, 'Google sign-in completed');
+  });
   
   login = catchAsync(async (req, res) => {
     const result = await authService.login(req.body);
@@ -92,8 +97,14 @@ export class AuthController {
       'https://openidconnect.googleapis.com/v1/userinfo',
       { headers: { Authorization: `Bearer ${tokens.access_token}` } },
     );
-    const result = await authService.googleLogin(await profileResponse.json());
-    res.redirect(`${env.CLIENT_URL}/callback?token=${encodeURIComponent(result.token)}`);
+    const profile = await profileResponse.json();
+    if (!profileResponse.ok || profile.email_verified !== true) {
+      return res.redirect(`${env.CLIENT_URL}/sign-in?error=google`);
+    }
+    const result = await authService.googleLogin(profile);
+    const callbackToken = result.googleAuthToken || result.token;
+    const tokenType = result.googleAuthToken ? 'intent' : 'token';
+    res.redirect(`${env.CLIENT_URL}/callback?${tokenType}=${encodeURIComponent(callbackToken)}`);
   });
 
   gmailAuthorize = (req, res) => {

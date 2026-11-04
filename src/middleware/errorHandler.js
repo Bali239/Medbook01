@@ -9,6 +9,8 @@ const errorHandler = (err, req, res, next) => {
     success: false,
     status: err.status,
     message: err.isOperational ? err.message : 'We could not complete your request. Please try again.',
+    ...(err.isOperational && err.code ? { code: err.code } : {}),
+    ...(err.isOperational && err.role ? { role: err.role } : {}),
   });
 };
 

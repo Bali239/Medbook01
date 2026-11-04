@@ -38,6 +38,14 @@ export class ConflictError extends AppError {
   }
 }
 
+export class RoleMismatchError extends ConflictError {
+  constructor(role) {
+    super('The selected profile does not match this account.');
+    this.code = 'ROLE_MISMATCH';
+    this.role = role;
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(message = 'Validation Error') {
     super(message, 422);

@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../../models/User.js';
-import { BadRequestError, UnauthorizedError } from '../../errors/AppError.js';
+import { BadRequestError, RoleMismatchError, UnauthorizedError } from '../../errors/AppError.js';
 import { createToken, hashToken } from './email.service.js';
 import { env } from '../../config/env.js';
 import { EmailDeliveryService } from '../notifications/email-delivery.service.js';
@@ -14,14 +14,16 @@ const signToken = (id, sessionVersion = 0) => {
 };
 
 export class AuthService {
-  constructor({ emailDeliveryService = new EmailDeliveryService() } = {}) {
+  constructor({ emailDeliveryService = new EmailDeliveryService(), userModel = User, adminEmail = env.ADMIN_EMAIL } = {}) {
     this.emailDeliveryService = emailDeliveryService;
+    this.userModel = userModel;
+    this.adminEmail = adminEmail;
   }
 
   async register(data) {
     const { name, email, password, role } = data;
     
-    const existingUser = await User.findOne({ email });
+    const existingUser = await this.userModel.findOne({ email });
     if (existingUser) {
       throw new BadRequestError('Email already in use');
     }
@@ -29,8 +31,8 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 12);
     
     const verificationToken = createToken();
-    const configuredAdmin = env.ADMIN_EMAIL && email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
-    const user = await User.create({
+    const configuredAdmin = this.isConfiguredAdmin(email);
+    const user = await this.userModel.create({
       name,
       email,
       password: hashedPassword,
@@ -46,24 +48,30 @@ export class AuthService {
       ...verificationMessage,
       dedupeKey: `auth:verification:${user._id}:${hashToken(verificationToken)}`,
     });
-    const token = signToken(user._id, user.sessionVersion);
-    
     return {
-      token,
       user: this.publicUser(user),
     };
   }
   
   async login(data) {
-    const { email, password } = data;
+    const { email, password, role } = data;
     
-    const user = await User.findOne({ email }).select('+password');
+    const user = await this.userModel.findOne({ email }).select('+password');
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedError('Incorrect email or password');
     }
     
     if (!user.isActive) {
       throw new UnauthorizedError('Your account has been deactivated');
+    }
+
+    if (!user.isEmailVerified) {
+      throw new UnauthorizedError('Check your inbox and verify your email before signing in.');
+    }
+
+    const actualRole = this.isConfiguredAdmin(user.email) ? 'admin' : user.role;
+    if (role !== actualRole) {
+      throw new RoleMismatchError(actualRole);
     }
     
     const token = signToken(user._id, user.sessionVersion);
@@ -75,7 +83,7 @@ export class AuthService {
   }
 
   async verifyEmail(token) {
-    const user = await User.findOne({
+    const user = await this.userModel.findOne({
       emailVerificationTokenHash: hashToken(token),
       emailVerificationExpiresAt: { $gt: new Date() },
     });
@@ -90,7 +98,7 @@ export class AuthService {
   }
 
   async requestPasswordReset(email) {
-    const user = await User.findOne({ email });
+    const user = await this.userModel.findOne({ email });
     if (!user) return;
     const token = createToken();
     user.passwordResetTokenHash = hashToken(token);
@@ -106,7 +114,7 @@ export class AuthService {
   }
 
   async resetPassword(token, password) {
-    const user = await User.findOne({
+    const user = await this.userModel.findOne({
       passwordResetTokenHash: hashToken(token),
       passwordResetExpiresAt: { $gt: new Date() },
     });
@@ -122,7 +130,11 @@ export class AuthService {
   }
 
   async googleLogin(profile) {
-    let user = await User.findOne({
+    if (profile.email_verified !== true) {
+      throw new UnauthorizedError('Google must verify your email before sign-in.');
+    }
+
+    let user = await this.userModel.findOne({
       $or: [{ googleId: profile.sub }, { email: profile.email }],
     });
     if (user) {
@@ -131,21 +143,66 @@ export class AuthService {
       if (profile.picture && !user.avatar) user.avatar = profile.picture;
       await user.save();
     } else {
-      user = await User.create({
+      const configuredAdmin = this.isConfiguredAdmin(profile.email);
+      user = await this.userModel.create({
         name: profile.name,
         email: profile.email,
         googleId: profile.sub,
         avatar: profile.picture,
         isEmailVerified: true,
-        role: 'patient',
+        role: configuredAdmin ? 'admin' : 'patient',
+        isGoogleRoleSelectionPending: !configuredAdmin,
       });
     }
+
+    if (!user.isActive) {
+      throw new UnauthorizedError('Your account has been deactivated');
+    }
+
+    if (this.isConfiguredAdmin(user.email)) {
+      user.role = 'admin';
+      user.isGoogleRoleSelectionPending = false;
+      user.googleAuthIntentHash = undefined;
+      user.googleAuthIntentExpiresAt = undefined;
+      await user.save();
+      return { token: signToken(user._id, user.sessionVersion), user: this.publicUser(user) };
+    }
+
+    const googleAuthToken = createToken();
+    user.googleAuthIntentHash = hashToken(googleAuthToken);
+    user.googleAuthIntentExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+    return { googleAuthToken };
+  }
+
+  async completeGoogleLogin(token, role) {
+    const user = await this.userModel.findOne({
+      googleAuthIntentHash: hashToken(token),
+      googleAuthIntentExpiresAt: { $gt: new Date() },
+    });
+    if (!user) {
+      throw new BadRequestError('This Google sign-in session is invalid or expired. Please try again.');
+    }
+    if (!user.isActive) {
+      throw new UnauthorizedError('Your account has been deactivated');
+    }
+
+    const actualRole = this.isConfiguredAdmin(user.email) ? 'admin' : user.role;
+    if (user.isGoogleRoleSelectionPending) {
+      user.role = role;
+      user.isGoogleRoleSelectionPending = false;
+    } else if (role !== actualRole) {
+      throw new RoleMismatchError(actualRole);
+    }
+
+    user.googleAuthIntentHash = undefined;
+    user.googleAuthIntentExpiresAt = undefined;
+    await user.save();
     return { token: signToken(user._id, user.sessionVersion), user: this.publicUser(user) };
   }
 
   publicUser(user) {
-    const isAdmin = env.ADMIN_EMAIL && user.email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
-    const role = isAdmin ? 'admin' : user.role;
+    const role = this.isConfiguredAdmin(user.email) ? 'admin' : user.role;
     return {
       id: user._id,
       name: user.name,
@@ -155,5 +212,8 @@ export class AuthService {
       isEmailVerified: user.isEmailVerified,
       avatar: user.avatar,
     };
+  }
+  isConfiguredAdmin(email) {
+    return Boolean(this.adminEmail && email.toLowerCase() === this.adminEmail.toLowerCase());
   }
 }

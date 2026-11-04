@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import errorHandler from '../src/middleware/errorHandler.js';
+import { RoleMismatchError } from '../src/errors/AppError.js';
 
 const captureResponse = () => ({
   code: undefined,
@@ -40,4 +41,13 @@ test('unexpected errors return generic copy and keep stack details out of the re
   assert.equal(response.body.message, 'We could not complete your request. Please try again.');
   assert.doesNotMatch(JSON.stringify(response.body), /database connection string/);
   assert.match(loggedError.stack, /database connection string/);
+});
+
+test('role mismatch responses include the role only after valid credentials', () => {
+  const response = captureResponse();
+  errorHandler(new RoleMismatchError('doctor'), {}, response, () => {});
+
+  assert.equal(response.code, 409);
+  assert.equal(response.body.code, 'ROLE_MISMATCH');
+  assert.equal(response.body.role, 'doctor');
 });
