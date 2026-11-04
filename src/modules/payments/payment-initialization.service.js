@@ -166,27 +166,51 @@ export class PaymentInitializationService {
       this.slotHoldModel.findOne({ appointment: payment.appointment }),
     ]);
     let intent;
+    const retryablePayment = ['pending', 'failed', 'requires_action'].includes(payment.status);
+
+    const createIntent = async (idempotencyKey) => stripeClient.paymentIntents.create({
+      amount: payment.amountMinor,
+      currency: payment.currency,
+      customer: customerId,
+      automatic_payment_methods: { enabled: true },
+      description: 'Medical consultation appointment',
+      metadata: {
+        payment_id: String(payment._id),
+        appointment_id: String(payment.appointment),
+        patient_id: String(payment.patient),
+        doctor_id: String(payment.doctor),
+        ...(productId ? { product_id: productId } : {}),
+      },
+    }, { idempotencyKey });
 
     try {
       if (payment.stripePaymentIntentId) {
-        intent = await stripeClient.paymentIntents.retrieve(payment.stripePaymentIntentId);
+        const storedIntentId = payment.stripePaymentIntentId;
+        try {
+          intent = await stripeClient.paymentIntents.retrieve(storedIntentId);
+        } catch (error) {
+          // A local database can outlive a Stripe test account/key. A retryable
+          // payment must recover from that stale reference instead of becoming
+          // permanently unpayable.
+          if (!retryablePayment || error?.code !== 'resource_missing') throw error;
+          intent = await createIntent(`medbook-payment-recovery-${payment._id}-${storedIntentId}`);
+          await this.paymentModel.updateOne(
+            { _id: payment._id, stripePaymentIntentId: storedIntentId },
+            { $set: { stripePaymentIntentId: intent.id } },
+          );
+        }
+
+        // Stripe canceled intents cannot accept new payment details. This can
+        // happen after a previous checkout attempt was abandoned or canceled.
+        if (retryablePayment && intent.status === 'canceled') {
+          intent = await createIntent(`medbook-payment-recovery-${payment._id}-${storedIntentId}`);
+          await this.paymentModel.updateOne(
+            { _id: payment._id, stripePaymentIntentId: storedIntentId },
+            { $set: { stripePaymentIntentId: intent.id } },
+          );
+        }
       } else {
-        intent = await stripeClient.paymentIntents.create({
-          amount: payment.amountMinor,
-          currency: payment.currency,
-          customer: customerId,
-          automatic_payment_methods: { enabled: true },
-          description: 'Medical consultation appointment',
-          metadata: {
-            payment_id: String(payment._id),
-            appointment_id: String(payment.appointment),
-            patient_id: String(payment.patient),
-            doctor_id: String(payment.doctor),
-            ...(productId ? { product_id: productId } : {}),
-          },
-        }, {
-          idempotencyKey: `medbook-payment-${payment.idempotencyKey}`,
-        });
+        intent = await createIntent(`medbook-payment-${payment.idempotencyKey}`);
       }
     } catch {
       throw new AppError('Payment could not be initialized. Retry the same payment attempt shortly.', 503);
