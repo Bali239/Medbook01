@@ -7,14 +7,20 @@ import { startAppointmentReminderJob } from './jobs/appointmentReminders.js';
 
 const PORT = env.PORT;
 
-connectDB().then(async () => {
+const startServer = async () => {
+  await connectDB();
   new StripeWebhookWorker().start();
   void cleanupExpiredHolds();
   startAppointmentReminderJob();
   const holdCleanupTimer = setInterval(() => void cleanupExpiredHolds(), 60_000);
   holdCleanupTimer.unref?.();
-});
 
-app.listen(PORT, () => {
-  console.log(`API server running on port ${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`API server running on port ${PORT}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Unable to start API server', error);
+  process.exit(1);
 });

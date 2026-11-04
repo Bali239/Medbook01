@@ -8,6 +8,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(5000),
   API_VERSION: z.string().default('v1'),
   CLIENT_URL: z.string().url().optional(),
+  ALLOWED_ORIGINS: z.string().optional(),
   MONGODB_URI: z.string().optional(),
   JWT_SECRET: z.string().default('dev-secret'),
   JWT_EXPIRE: z.string().default('7d'),
@@ -45,6 +46,38 @@ const envSchema = z.object({
   FX_RATE_URL: z.string().url().default('https://open.er-api.com/v6/latest/PKR'),
   FX_RATE_MAX_AGE_MINUTES: z.coerce.number().int().positive().default(1500),
 }).superRefine((values, context) => {
+  if (values.NODE_ENV === 'production') {
+    for (const key of [
+      'CLIENT_URL',
+      'ALLOWED_ORIGINS',
+      'MONGODB_URI',
+      'ADMIN_EMAIL',
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'GOOGLE_REDIRECT_URI',
+      'GMAIL_SENDER',
+      'GMAIL_CLIENT_ID',
+      'GMAIL_CLIENT_SECRET',
+      'GMAIL_REFRESH_TOKEN',
+    ]) {
+      if (!values[key]) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required in production`,
+        });
+      }
+    }
+
+    if (values.JWT_SECRET === 'dev-secret') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['JWT_SECRET'],
+        message: 'JWT_SECRET must be changed in production',
+      });
+    }
+  }
+
   if (!values.PAYMENTS_ENABLED) return;
 
   for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET']) {
