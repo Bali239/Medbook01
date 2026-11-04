@@ -4,30 +4,12 @@ const errorHandler = (err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
 
-  if (process.env.NODE_ENV === 'development') {
-    res.status(err.statusCode).json({
-      success: false,
-      status: err.status,
-      error: err,
-      message: err.message,
-      stack: err.stack,
-    });
-  } else {
-    if (err.isOperational) {
-      res.status(err.statusCode).json({
-        success: false,
-        status: err.status,
-        message: err.message,
-      });
-    } else {
-      console.error('ERROR 💥', err);
-      res.status(500).json({
-        success: false,
-        status: 'error',
-        message: 'Something went wrong!',
-      });
-    }
-  }
+  if (!err.isOperational) console.error('Unhandled API error', err);
+  res.status(err.statusCode).json({
+    success: false,
+    status: err.status,
+    message: err.isOperational ? err.message : 'We could not complete your request. Please try again.',
+  });
 };
 
 export default errorHandler;
