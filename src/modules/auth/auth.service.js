@@ -40,10 +40,10 @@ export class AuthService {
     });
     
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
-    const email = verificationEmail({ name: user.name, url: `${clientUrl}/verify-email?token=${verificationToken}` });
+    const verificationMessage = verificationEmail({ name: user.name, url: `${clientUrl}/verify-email?token=${verificationToken}` });
     await this.emailDeliveryService.enqueue({
       to: user.email,
-      ...email,
+      ...verificationMessage,
       dedupeKey: `auth:verification:${user._id}:${hashToken(verificationToken)}`,
     });
     const token = signToken(user._id, user.sessionVersion);
